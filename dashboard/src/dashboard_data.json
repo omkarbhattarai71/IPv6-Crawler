@@ -1,0 +1,50 @@
+{
+    "scan_stats": {
+        "total": 84766,
+        "success": 1429,
+        "failed": 83337,
+        "hit_rate_percentage": 1.6858
+    },
+    "top_infrastructure": [
+        {
+            "name": "technicolor.net",
+            "count": 468
+        },
+        {
+            "name": "localhost",
+            "count": 246
+        },
+        {
+            "name": "HTTPS-Self-Signed-Certificate-93df95d48ed55e58",
+            "count": 10
+        },
+        {
+            "name": "Plesk",
+            "count": 10
+        },
+        {
+            "name": "*.1.oca.nflxvideo.net",
+            "count": 9
+        },
+        {
+            "name": "TRAEFIK DEFAULT CERT",
+            "count": 9
+        },
+        {
+            "name": "OpenWrt",
+            "count": 8
+        },
+        {
+            "name": "default",
+            "count": 7
+        },
+        {
+            "name": "*.nperf.net",
+            "count": 7
+        },
+        {
+            "name": "yunohost.org",
+            "count": 7
+        }
+    ]
+}
