@@ -213,3 +213,5 @@ dataset/
 *.txt
 *.gz
 *.zip
+Yes/
+results/
