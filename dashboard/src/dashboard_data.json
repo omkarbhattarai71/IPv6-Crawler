@@ -1,33 +1,34 @@
 {
+    "last_updated": "2026-05-04T20:27:48.451355",
     "scan_stats": {
-        "total": 84766,
-        "success": 1429,
-        "failed": 83337,
-        "hit_rate_percentage": 1.6858
+        "total": 42811,
+        "success": 1071,
+        "failed": 41740,
+        "hit_rate_percentage": 2.5017
     },
     "top_infrastructure": [
         {
             "name": "technicolor.net",
-            "count": 468
+            "count": 234
         },
         {
             "name": "localhost",
-            "count": 246
-        },
-        {
-            "name": "HTTPS-Self-Signed-Certificate-93df95d48ed55e58",
-            "count": 10
+            "count": 128
         },
         {
             "name": "Plesk",
             "count": 10
         },
         {
-            "name": "*.1.oca.nflxvideo.net",
-            "count": 9
+            "name": "HTTPS-Self-Signed-Certificate-93df95d48ed55e58",
+            "count": 10
         },
         {
             "name": "TRAEFIK DEFAULT CERT",
+            "count": 9
+        },
+        {
+            "name": "*.1.oca.nflxvideo.net",
             "count": 9
         },
         {
@@ -35,7 +36,7 @@
             "count": 8
         },
         {
-            "name": "default",
+            "name": "yunohost.org",
             "count": 7
         },
         {
@@ -43,8 +44,64 @@
             "count": 7
         },
         {
-            "name": "yunohost.org",
+            "name": "HTTPS-Self-Signed-Certificate-10fedd15f102157f",
             "count": 7
         }
-    ]
+    ],
+    "historical_data": [
+        {
+            "phase": "20_04_26",
+            "date": "2026-04-20",
+            "stats": {
+                "total": 42811,
+                "success": 1071,
+                "failed": 41740,
+                "hit_rate_percentage": 2.5017
+            },
+            "top_infrastructure": [
+                {
+                    "name": "technicolor.net",
+                    "count": 234
+                },
+                {
+                    "name": "localhost",
+                    "count": 128
+                },
+                {
+                    "name": "Plesk",
+                    "count": 10
+                },
+                {
+                    "name": "HTTPS-Self-Signed-Certificate-93df95d48ed55e58",
+                    "count": 10
+                },
+                {
+                    "name": "TRAEFIK DEFAULT CERT",
+                    "count": 9
+                },
+                {
+                    "name": "*.1.oca.nflxvideo.net",
+                    "count": 9
+                },
+                {
+                    "name": "OpenWrt",
+                    "count": 8
+                },
+                {
+                    "name": "yunohost.org",
+                    "count": 7
+                },
+                {
+                    "name": "*.nperf.net",
+                    "count": 7
+                },
+                {
+                    "name": "HTTPS-Self-Signed-Certificate-10fedd15f102157f",
+                    "count": 7
+                }
+            ],
+            "is_latest": true
+        }
+    ],
+    "total_phases": 1
 }
