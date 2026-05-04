@@ -1,451 +1,453 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  LabelList,
-  Cell
+  LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  Cell, ScatterChart, Scatter, ComposedChart
 } from 'recharts';
 import 'bootstrap/dist/css/bootstrap.min.css';
-
-// Import the aggregated JSON data directly
+import './App.css';
 import dashboardData from './dashboard_data.json';
 
-const COLORS = ['#4e79a7', '#59a14f', '#9c755f', '#f28e2b', '#e15759', '#76b7b2'];
-
-const truncate = (text, max = 40) => (text.length > max ? `${text.slice(0, max)}…` : text);
-
-function App() {
-  const { scan_stats, top_infrastructure } = dashboardData;
-
-  const [query, setQuery] = useState('');
-  const [showAll, setShowAll] = useState(false);
-  const [topN, setTopN] = useState(10);
-  const [selectedHost, setSelectedHost] = useState(null);
-
-  // Table controls
-  const [sortKey, setSortKey] = useState('count'); // name | count | share | rank
-  const [sortDir, setSortDir] = useState('desc');  // asc | desc
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-
-  const totalActive = scan_stats.success || 1;
-
-  const sortedData = useMemo(
-    () => [...top_infrastructure].sort((a, b) => b.count - a.count),
-    [top_infrastructure]
+// Status indicator component
+const StatusIndicator = ({ value, threshold = 50, label }) => {
+  const status = value >= threshold ? 'success' : value >= threshold * 0.5 ? 'warning' : 'danger';
+  return (
+    <div className={`status-indicator ${status}`}>
+      <div className="status-value">{value.toFixed(2)}%</div>
+      <div className="status-label">{label}</div>
+    </div>
   );
+};
 
-  const rankByName = useMemo(() => {
-    const map = new Map();
-    sortedData.forEach((d, i) => map.set(d.name, i + 1));
-    return map;
-  }, [sortedData]);
-
-  const filteredData = useMemo(
-    () => sortedData.filter((d) => d.name.toLowerCase().includes(query.toLowerCase().trim())),
-    [sortedData, query]
+// Metric card component
+const MetricCard = ({ title, value, subtitle, icon, trend, color = '#4e79a7' }) => {
+  return (
+    <div className="metric-card" style={{ borderLeftColor: color }}>
+      <div className="metric-header">
+        <h4>{title}</h4>
+        {icon && <span className="metric-icon">{icon}</span>}
+      </div>
+      <div className="metric-value">{value.toLocaleString()}</div>
+      {subtitle && <div className="metric-subtitle">{subtitle}</div>}
+      {trend && (
+        <div className={`trend ${trend > 0 ? 'positive' : 'negative'}`}>
+          {trend > 0 ? '↑' : '↓'} {Math.abs(trend).toFixed(1)}%
+        </div>
+      )}
+    </div>
   );
+};
 
-  const visibleData = useMemo(
-    () => (showAll ? filteredData : filteredData.slice(0, topN)),
-    [filteredData, showAll, topN]
+// Enhanced tooltip for charts
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="custom-tooltip">
+        <p className="label">{label}</p>
+        {payload.map((entry, index) => (
+          <p key={index} style={{ color: entry.color }}>
+            {entry.name}: {entry.value.toLocaleString()}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
+// Phase timeline component
+const PhaseTimeline = ({ data, selectedPhase, onSelectPhase }) => {
+  return (
+    <div className="phase-timeline">
+      <h5>Execution History</h5>
+      <div className="timeline-container">
+        {data.map((item, idx) => (
+          <div
+            key={idx}
+            className={`timeline-item ${item.is_latest ? 'latest' : ''} ${selectedPhase?.phase === item.phase ? 'selected' : ''}`}
+            onClick={() => onSelectPhase(item)}
+            title={`Phase: ${item.phase}\nDate: ${item.date}`}
+          >
+            <div className="timeline-dot" />
+            <div className="timeline-date">{item.date}</div>
+            <div className="timeline-phase">{item.phase}</div>
+            {item.is_latest && <div className="latest-badge">LATEST</div>}
+          </div>
+        ))}
+      </div>
+    </div>
   );
+};
 
-  const chartData = useMemo(
-    () =>
-      visibleData.map((d) => ({
-        ...d,
-        share: Number(((d.count / totalActive) * 100).toFixed(3))
-      })),
-    [visibleData, totalActive]
-  );
+// Infrastructure breakdown card
+const InfrastructureBreakdown = ({ data, totalSuccess }) => {
+  const chartData = data.slice(0, 8).map(item => ({
+    name: item.name.length > 20 ? item.name.substring(0, 20) + '...' : item.name,
+    value: item.count,
+    fullName: item.name
+  }));
 
-  const chartHeight = Math.max(420, chartData.length * 44);
+  const COLORS_INFRA = ['#4e79a7', '#59a14f', '#9c755f', '#f28e2b', '#e15759', '#76b7b2', '#bab0ac', '#8cd17d'];
 
-  const coveredByVisible = chartData.reduce((acc, d) => acc + d.count, 0);
-  const coveredPct = ((coveredByVisible / totalActive) * 100).toFixed(2);
-
-  const tableRows = useMemo(
-    () =>
-      filteredData.map((d) => ({
-        ...d,
-        rank: rankByName.get(d.name) ?? null,
-        share: Number(((d.count / totalActive) * 100).toFixed(3))
-      })),
-    [filteredData, rankByName, totalActive]
-  );
-
-  const sortedTableRows = useMemo(() => {
-    const rows = [...tableRows];
-    rows.sort((a, b) => {
-      let cmp = 0;
-      if (sortKey === 'name') cmp = a.name.localeCompare(b.name);
-      else cmp = Number(a[sortKey]) - Number(b[sortKey]);
-      return sortDir === 'asc' ? cmp : -cmp;
-    });
-    return rows;
-  }, [tableRows, sortKey, sortDir]);
-
-  const totalPages = Math.max(1, Math.ceil(sortedTableRows.length / pageSize));
-  const pagedRows = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return sortedTableRows.slice(start, start + pageSize);
-  }, [sortedTableRows, page, pageSize]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [query, pageSize, sortKey, sortDir]);
-
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
-
-  const toggleSort = (key) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortKey(key);
-      setSortDir(key === 'name' ? 'asc' : 'desc');
-    }
+  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+    
+    if (percent < 0.05) return null;
+    
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="white"
+        textAnchor={x > cx ? 'start' : 'end'}
+        dominantBaseline="central"
+        className="pie-label"
+      >
+        {`${(percent * 100).toFixed(1)}%`}
+      </text>
+    );
   };
 
-  const sortIndicator = (key) => (sortKey === key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
+  return (
+    <div className="infrastructure-card">
+      <h5>Infrastructure Distribution (Top 8)</h5>
+      <ResponsiveContainer width="100%" height={300}>
+        <PieChart>
+          <Pie
+            data={chartData}
+            cx="50%"
+            cy="50%"
+            labelLine={false}
+            label={renderCustomLabel}
+            outerRadius={80}
+            fill="#8884d8"
+            dataKey="value"
+          >
+            {chartData.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS_INFRA[index % COLORS_INFRA.length]} />
+            ))}
+          </Pie>
+          <Tooltip
+            contentStyle={{ backgroundColor: '#f9f9f9', border: '1px solid #ccc', borderRadius: '4px' }}
+            formatter={(value) => `${value.toLocaleString()} (${((value / totalSuccess) * 100).toFixed(2)}%)`}
+            labelFormatter={(label) => `Provider: ${label}`}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="infrastructure-list">
+        {chartData.map((item, idx) => (
+          <div key={idx} className="infra-item">
+            <span className="infra-badge" style={{ backgroundColor: COLORS_INFRA[idx % COLORS_INFRA.length] }} />
+            <span className="infra-name" title={item.fullName}>{item.name}</span>
+            <span className="infra-value">{item.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Main App Component
+function App() {
+  const [selectedPhase, setSelectedPhase] = useState(null);
+  const [query, setQuery] = useState('');
+  const [sortKey, setSortKey] = useState('count');
+  const [sortDir, setSortDir] = useState('desc');
+
+  // Initialize with latest phase
+  useEffect(() => {
+    if (dashboardData.historical_data && dashboardData.historical_data.length > 0) {
+      const latest = dashboardData.historical_data.find(p => p.is_latest) || dashboardData.historical_data[0];
+      setSelectedPhase(latest);
+    }
+  }, []);
+
+  const currentData = selectedPhase || dashboardData;
+  const stats = currentData.stats || dashboardData.scan_stats;
+  const infrastructure = currentData.top_infrastructure || dashboardData.top_infrastructure;
+
+  // Calculate metrics
+  const hitRate = stats.hit_rate_percentage || ((stats.success / stats.total) * 100);
+  const failRate = 100 - hitRate;
+  const successRatio = (stats.success / stats.total) * 100;
+
+  // Trend calculation (comparing with previous phase)
+  const trendHitRate = useMemo(() => {
+    if (!dashboardData.historical_data || dashboardData.historical_data.length < 2) return 0;
+    const sorted = [...dashboardData.historical_data].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const current = sorted[0];
+    const previous = sorted[1];
+    return ((current.stats.hit_rate_percentage - previous.stats.hit_rate_percentage) / previous.stats.hit_rate_percentage) * 100;
+  }, []);
+
+  // Prepare historical trend data
+  const trendData = useMemo(() => {
+    if (!dashboardData.historical_data) return [];
+    return dashboardData.historical_data
+      .slice()
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .map(item => ({
+        date: item.date,
+        phase: item.phase,
+        hitRate: item.stats.hit_rate_percentage,
+        success: item.stats.success,
+        failed: item.stats.failed,
+        total: item.stats.total
+      }));
+  }, []);
+
+  // Success vs Failed comparison data
+  const comparisonData = useMemo(() => {
+    if (!dashboardData.historical_data) return [];
+    return dashboardData.historical_data
+      .slice()
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .map(item => ({
+        phase: item.phase.substring(0, 8),
+        Success: item.stats.success,
+        Failed: item.stats.failed,
+        total: item.stats.total
+      }));
+  }, []);
+
+  // Filtered infrastructure data
+  const filteredInfra = useMemo(() => {
+    return infrastructure
+      .filter(item => item.name.toLowerCase().includes(query.toLowerCase()))
+      .sort((a, b) => {
+        let cmp = 0;
+        if (sortKey === 'name') cmp = a.name.localeCompare(b.name);
+        else cmp = Number(a[sortKey]) - Number(b[sortKey]);
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+  }, [infrastructure, query, sortKey, sortDir]);
 
   return (
-    <div className="container mt-5">
-      <h1 className="mb-2 text-primary">IPv6 Discovery Dashboard</h1>
-      <p className="lead mb-4">Predictive Web Server Fingerprinting & CDN Analysis</p>
-
-      {/* High-Level Stats Cards */}
-      <div className="row mb-4">
-        <div className="col-md-3">
-          <div className="card text-white bg-dark mb-3">
-            <div className="card-body">
-              <h5 className="card-title">Total Probed</h5>
-              <h2 className="card-text">{scan_stats.total.toLocaleString()}</h2>
-            </div>
+    <div className="app-container">
+      {/* Header */}
+      <header className="app-header">
+        <div className="header-content">
+          <div>
+            <h1>IPv6 Crawler Dashboard</h1>
+            <p className="header-subtitle">Active IPv6 Prefix Analysis & Infrastructure Mapping</p>
+          </div>
+          <div className="header-meta">
+            <span className="last-updated">Last Updated: {new Date(dashboardData.last_updated).toLocaleString()}</span>
+            <span className="total-phases">Phases: {dashboardData.total_phases || dashboardData.historical_data?.length}</span>
           </div>
         </div>
-        <div className="col-md-3">
-          <div className="card text-white bg-success mb-3">
-            <div className="card-body">
-              <h5 className="card-title">Active Servers</h5>
-              <h2 className="card-text">{scan_stats.success.toLocaleString()}</h2>
-            </div>
+      </header>
+
+      <div className="app-body">
+        {/* KPI Section */}
+        <section className="kpi-section">
+          <div className="kpi-grid">
+            <MetricCard
+              title="Total Scanned"
+              value={stats.total}
+              subtitle="IPv6 addresses scanned"
+              icon="🎯"
+              color="#4e79a7"
+            />
+            <MetricCard
+              title="Success Count"
+              value={stats.success}
+              subtitle={`${successRatio.toFixed(2)}% successful`}
+              icon="✓"
+              color="#59a14f"
+              trend={trendHitRate}
+            />
+            <MetricCard
+              title="Failed Count"
+              value={stats.failed}
+              subtitle={`${failRate.toFixed(2)}% failed`}
+              icon="✗"
+              color="#e15759"
+            />
+            <MetricCard
+              title="Hit Rate"
+              value={hitRate}
+              subtitle="Success percentage"
+              icon="📊"
+              color="#f28e2b"
+              trend={trendHitRate}
+            />
           </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card text-white bg-danger mb-3">
-            <div className="card-body">
-              <h5 className="card-title">Reset</h5>
-              <h2 className="card-text">{scan_stats.failed.toLocaleString()}</h2>
-            </div>
+        </section>
+
+        {/* Status Indicators */}
+        <section className="status-section">
+          <h4>Performance Metrics</h4>
+          <div className="status-grid">
+            <StatusIndicator value={successRatio} threshold={75} label="Success Rate" />
+            <StatusIndicator value={hitRate} threshold={50} label="Hit Rate" />
+            <StatusIndicator value={Math.min(100, (stats.success / Math.max(1, stats.total)) * 100)} threshold={60} label="Efficiency" />
           </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card text-white bg-info mb-3">
-            <div className="card-body">
-              <h5 className="card-title">Hit Rate</h5>
-              <h2 className="card-text">{Number(scan_stats.hit_rate_percentage).toFixed(2)}%</h2>
-            </div>
-          </div>
-        </div>
-      </div>
+        </section>
 
-      {/* Controls + Extra Info */}
-      <div className="card shadow-sm mb-3">
-        <div className="card-body">
-          <div className="row g-3 align-items-end">
-            <div className="col-md-5">
-              <label className="form-label mb-1">Search host / certificate / server name</label>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="e.g. localhost, technicolor, nflxvideo"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </div>
+        {/* Phase Timeline */}
+        {dashboardData.historical_data && dashboardData.historical_data.length > 0 && (
+          <section className="timeline-section">
+            <PhaseTimeline
+              data={dashboardData.historical_data}
+              selectedPhase={selectedPhase}
+              onSelectPhase={setSelectedPhase}
+            />
+          </section>
+        )}
 
-            <div className="col-md-3">
-              <label className="form-label mb-1">Top N</label>
-              <select
-                className="form-select"
-                value={topN}
-                onChange={(e) => setTopN(Number(e.target.value))}
-                disabled={showAll}
-              >
-                {[5, 10, 15, 20, 30, 50].map((n) => (
-                  <option key={n} value={n}>
-                    Top {n}
-                  </option>
-                ))}
-              </select>
+        {/* Charts Grid */}
+        <div className="charts-grid">
+          {/* Hit Rate Trend */}
+          {trendData.length > 0 && (
+            <div className="chart-card">
+              <h5>Hit Rate Trend</h5>
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={trendData}>
+                  <defs>
+                    <linearGradient id="colorHitRate" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f28e2b" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#f28e2b" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                  <XAxis dataKey="date" stroke="#666" />
+                  <YAxis stroke="#666" />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Area
+                    type="monotone"
+                    dataKey="hitRate"
+                    stroke="#f28e2b"
+                    fillOpacity={1}
+                    fill="url(#colorHitRate)"
+                    name="Hit Rate (%)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
+          )}
 
-            <div className="col-md-2">
-              <button
-                className={`btn w-100 ${showAll ? 'btn-primary' : 'btn-outline-primary'}`}
-                onClick={() => setShowAll((s) => !s)}
-              >
-                {showAll ? 'Showing All' : 'Show All'}
-              </button>
+          {/* Success vs Failed Comparison */}
+          {comparisonData.length > 0 && (
+            <div className="chart-card">
+              <h5>Success vs Failed Comparison</h5>
+              <ResponsiveContainer width="100%" height={300}>
+                <ComposedChart data={comparisonData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                  <XAxis dataKey="phase" stroke="#666" />
+                  <YAxis stroke="#666" />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend />
+                  <Bar dataKey="Success" fill="#59a14f" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="Failed" fill="#e15759" radius={[8, 8, 0, 0]} />
+                </ComposedChart>
+              </ResponsiveContainer>
             </div>
+          )}
 
-            <div className="col-md-2">
-              <button
-                className="btn btn-outline-secondary w-100"
-                onClick={() => {
-                  setQuery('');
-                  setTopN(10);
-                  setShowAll(false);
-                  setSelectedHost(null);
-                  setSortKey('count');
-                  setSortDir('desc');
-                  setPage(1);
-                  setPageSize(10);
-                }}
-              >
-                Reset Filters
-              </button>
-            </div>
+          {/* Infrastructure Distribution */}
+          <div className="chart-card">
+            <InfrastructureBreakdown data={infrastructure} totalSuccess={stats.success} />
           </div>
 
-          <div className="mt-3 small text-muted">
-            Visible hosts: <strong>{chartData.length}</strong> / {top_infrastructure.length} • Coverage of active servers:{' '}
-            <strong>{coveredByVisible.toLocaleString()}</strong> ({coveredPct}%)
-          </div>
-        </div>
-      </div>
-
-      {/* Infrastructure Fingerprinting Chart */}
-      <div className="card shadow-sm">
-        <div className="card-header bg-white border-0 pt-4 pb-0">
-          <h4 className="mb-1">Top Discovered Infrastructure (CDN / Server Names)</h4>
-          <p className="text-muted mb-0 small">Click a bar to inspect details</p>
-        </div>
-        <div className="card-body">
-          <div style={{ height: `${chartHeight}px`, width: '100%' }}>
-            <ResponsiveContainer>
+          {/* Top Infrastructure Providers */}
+          <div className="chart-card">
+            <h5>Top Infrastructure Providers</h5>
+            <ResponsiveContainer width="100%" height={300}>
               <BarChart
-                data={chartData}
+                data={infrastructure.slice(0, 10)}
                 layout="vertical"
-                margin={{ top: 20, right: 40, left: 200, bottom: 20 }}
+                margin={{ top: 5, right: 30, left: 200 }}
               >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" />
-                <YAxis
-                  dataKey="name"
-                  type="category"
-                  width={220}
-                  tickFormatter={(value) => truncate(value, 34)}
-                />
-                <Tooltip
-                  formatter={(value, name, payload) => {
-                    if (name === 'count') {
-                      return [`${Number(value).toLocaleString()} (${payload.payload.share}%)`, 'Active Instances'];
-                    }
-                    return [value, name];
-                  }}
-                  labelFormatter={(label) => `Host: ${label}`}
-                />
-                <Legend />
-                <Bar
-                  dataKey="count"
-                  name="Active Instances"
-                  onClick={(payload) => setSelectedHost(payload)}
-                  cursor="pointer"
-                >
-                  {chartData.map((_, idx) => (
-                    <Cell key={`cell-${idx}`} fill={COLORS[idx % COLORS.length]} />
-                  ))}
-                  <LabelList dataKey="count" position="right" />
-                </Bar>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                <XAxis type="number" stroke="#666" />
+                <YAxis dataKey="name" type="category" width={190} tick={{ fontSize: 12 }} stroke="#666" />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="count" fill="#4e79a7" radius={[0, 8, 8, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
-      </div>
 
-      {selectedHost && (
-        <div className="alert alert-light border mt-3">
-          <h6 className="mb-1">Selected Host</h6>
-          <div><strong>Name:</strong> {selectedHost.name}</div>
-          <div><strong>Active Instances:</strong> {selectedHost.count.toLocaleString()}</div>
-          <div><strong>Share of Active Servers:</strong> {((selectedHost.count / totalActive) * 100).toFixed(3)}%</div>
-        </div>
-      )}
+        {/* Infrastructure Table */}
+        <section className="table-section">
+          <div className="table-header">
+            <h4>All Infrastructure Providers</h4>
+            <input
+              type="text"
+              placeholder="Search providers..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="search-input"
+            />
+          </div>
 
-      {/* Full host table */}
-      <div className="card shadow-sm mt-3 mb-5">
-        <div className="card-header bg-white border-0 pt-4 pb-0">
-          <h4 className="mb-1">All Matching Hosts</h4>
-          <p className="text-muted mb-0 small">Sortable + paginated (click row to select)</p>
-        </div>
-        <div className="card-body">
-          <div className="table-responsive">
-            <table className="table table-hover align-middle">
+          <div className="table-controls">
+            <div className="control-group">
+              <label>Sort By:</label>
+              <select value={sortKey} onChange={(e) => setSortKey(e.target.value)} className="control-select">
+                <option value="name">Name</option>
+                <option value="count">Count</option>
+              </select>
+            </div>
+            <div className="control-group">
+              <label>Direction:</label>
+              <select value={sortDir} onChange={(e) => setSortDir(e.target.value)} className="control-select">
+                <option value="desc">Descending</option>
+                <option value="asc">Ascending</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="table-wrapper">
+            <table className="data-table">
               <thead>
                 <tr>
-                  <th role="button" onClick={() => toggleSort('rank')}>Rank{sortIndicator('rank')}</th>
-                  <th role="button" onClick={() => toggleSort('name')}>Name{sortIndicator('name')}</th>
-                  <th role="button" onClick={() => toggleSort('count')}>Count{sortIndicator('count')}</th>
-                  <th role="button" onClick={() => toggleSort('share')}>Share % of Active{sortIndicator('share')}</th>
+                  <th onClick={() => { setSortKey('name'); setSortDir(sortDir === 'asc' && sortKey === 'name' ? 'desc' : 'asc'); }} className="sortable">
+                    Provider Name {sortKey === 'name' && (sortDir === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th onClick={() => { setSortKey('count'); setSortDir(sortDir === 'asc' && sortKey === 'count' ? 'desc' : 'asc'); }} className="sortable">
+                    Count {sortKey === 'count' && (sortDir === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th>Percentage</th>
+                  <th>Share</th>
                 </tr>
               </thead>
               <tbody>
-                {pagedRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="text-center text-muted py-4">
-                      No hosts match the current filter.
+                {filteredInfra.map((item, idx) => (
+                  <tr key={idx} className={idx % 2 === 0 ? 'even' : 'odd'}>
+                    <td className="provider-name" title={item.name}>{item.name}</td>
+                    <td className="count-value">{item.count.toLocaleString()}</td>
+                    <td className="percentage">{((item.count / stats.success) * 100).toFixed(3)}%</td>
+                    <td>
+                      <div className="progress-bar">
+                        <div
+                          className="progress-fill"
+                          style={{ width: `${(item.count / stats.success) * 100}%` }}
+                        />
+                      </div>
                     </td>
                   </tr>
-                ) : (
-                  pagedRows.map((row) => (
-                    <tr
-                      key={row.name}
-                      role="button"
-                      className={selectedHost?.name === row.name ? 'table-primary' : ''}
-                      onClick={() => setSelectedHost(row)}
-                    >
-                      <td>{row.rank}</td>
-                      <td title={row.name}>{row.name}</td>
-                      <td>{row.count.toLocaleString()}</td>
-                      <td>{row.share.toFixed(3)}%</td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
           </div>
 
-          <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2">
-            <div className="small text-muted">
-              Showing {(pagedRows.length ? (page - 1) * pageSize + 1 : 0)}–
-              {Math.min(page * pageSize, sortedTableRows.length)} of {sortedTableRows.length}
-            </div>
-
-            <div className="d-flex align-items-center gap-2">
-              <label className="small text-muted mb-0">Rows</label>
-              <select
-                className="form-select form-select-sm"
-                style={{ width: 90 }}
-                value={pageSize}
-                onChange={(e) => setPageSize(Number(e.target.value))}
-              >
-                {[5, 10, 20, 50].map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
-
-              <button
-                className="btn btn-sm btn-outline-secondary"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Prev
-              </button>
-              <span className="small">Page {page} / {totalPages}</span>
-              <button
-                className="btn btn-sm btn-outline-secondary"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Next
-              </button>
-            </div>
+          <div className="table-footer">
+            <span className="result-count">Showing {filteredInfra.length} of {infrastructure.length} providers</span>
           </div>
-        </div>
+        </section>
       </div>
+
+      {/* Footer */}
+      <footer className="app-footer">
+        <p>IPv6 Crawler Analytics | Powered by LightGBM ML Pipeline</p>
+      </footer>
     </div>
   );
 }
 
 export default App;
-
-// import React from 'react';
-// import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-// import 'bootstrap/dist/css/bootstrap.min.css';
-
-// // Import the aggregated JSON data directly
-// import dashboardData from './dashboard_data.json';
-
-// function App() {
-//   const { scan_stats, top_infrastructure } = dashboardData;
-
-//   return (
-//     <div className="container mt-5">
-//       <h1 className="mb-4 text-primary">IPv6 Discovery Dashboard</h1>
-//       <p className="lead">Predictive Web Server Fingerprinting & CDN Analysis</p>
-
-//       {/* High-Level Stats Cards */}
-//       <div className="row mb-5">
-//         <div className="col-md-3">
-//           <div className="card text-white bg-dark mb-3">
-//             <div className="card-body">
-//               <h5 className="card-title">Total Probed</h5>
-//               <h2 className="card-text">{scan_stats.total.toLocaleString()}</h2>
-//             </div>
-//           </div>
-//         </div>
-//         <div className="col-md-3">
-//           <div className="card text-white bg-success mb-3">
-//             <div className="card-body">
-//               <h5 className="card-title">Active Servers</h5>
-//               <h2 className="card-text">{scan_stats.success.toLocaleString()}</h2>
-//             </div>
-//           </div>
-//         </div>
-//         <div className="col-md-3">
-//           <div className="card text-white bg-danger mb-3">
-//             <div className="card-body">
-//               <h5 className="card-title">Reset</h5>
-//               <h2 className="card-text">{scan_stats.failed.toLocaleString()}</h2>
-//             </div>
-//           </div>
-//         </div>
-//         <div className="col-md-3">
-//           <div className="card text-white bg-info mb-3">
-//             <div className="card-body">
-//               <h5 className="card-title">Hit Rate</h5>
-//               <h2 className="card-text">{scan_stats.hit_rate_percentage}%</h2>
-//             </div>
-//           </div>
-//         </div>
-//       </div>
-
-//       {/* Infrastructure Fingerprinting Chart */}
-//       <div className="card shadow-sm">
-//         <div className="card-header bg-white border-0 pt-4 pb-0">
-//           <h4>Top Discovered Infrastructure (CDN / Server Names)</h4>
-//         </div>
-//         <div className="card-body">
-//           <div style={{ height: '400px', width: '100%' }}>
-//             <ResponsiveContainer>
-//               <BarChart
-//                 data={top_infrastructure}
-//                 layout="vertical"
-//                 margin={{ top: 20, right: 30, left: 100, bottom: 5 }}
-//               >
-//                 <CartesianGrid strokeDasharray="3 3" />
-//                 <XAxis type="number" />
-//                 <YAxis dataKey="name" type="category" width={150} />
-//                 <Tooltip />
-//                 <Legend />
-//                 <Bar dataKey="count" fill="#8884d8" name="Active Instances" />
-//               </BarChart>
-//             </ResponsiveContainer>
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
-
-// export default App;
