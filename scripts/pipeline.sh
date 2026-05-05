@@ -25,9 +25,9 @@
 #SBATCH --job-name=ipv6-pipeline
 #SBATCH --output=slurm-output.log
 #SBATCH --error=slurm-output.err
-#SBATCH --time=03:00:00
-#SBATCH --mem=32G
-#SBATCH --cpus-per-task=4
+#SBATCH --time=12:00:00
+#SBATCH --mem=64G
+#SBATCH --cpus-per-task=8
 # Note: Using default partition (l4)
 # Available on ailab: l4 (GPU), vmware
 # Override with: sbatch -p vmware pipeline.sh (or -p l4 explicitly)

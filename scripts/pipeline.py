@@ -255,8 +255,8 @@ def generate_candidates(input_phase: str, current_phase: str, paths: dict, logge
         
         # Configuration
         PATTERNS = [1, 2, 80, 443, 8080, 0x100, 0x200]
-        RANDOM_PER_PREFIX = 120
-        TARGET_TOTAL = 50_000_000
+        RANDOM_PER_PREFIX = 120  
+        TARGET_TOTAL = 20_000_000
         
         per_prefix = len(PATTERNS) + RANDOM_PER_PREFIX
         needed_prefixes = math.ceil(TARGET_TOTAL / per_prefix)
