@@ -6,7 +6,6 @@ import {
 } from 'recharts';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
-import dashboardData from './dashboard_data.json';
 
 // Status indicator component
 const StatusIndicator = ({ value, threshold = 50, label }) => {
@@ -152,22 +151,75 @@ const InfrastructureBreakdown = ({ data, totalSuccess }) => {
 
 // Main App Component
 function App() {
+  const [dashboardData, setDashboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedPhase, setSelectedPhase] = useState(null);
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState('count');
   const [sortDir, setSortDir] = useState('desc');
+  const [lastUpdate, setLastUpdate] = useState(null);
 
-  // Initialize with latest phase
+  // Fetch dashboard data
+  const fetchDashboardData = async () => {
+    try {
+      // Add cache-busting parameter to force fresh data
+      const response = await fetch(`/dashboard_data.json?t=${Date.now()}`);
+      if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
+      
+      const data = await response.json();
+      
+      // Clean up invalid data (convert boolean names to strings)
+      if (data.top_infrastructure) {
+        data.top_infrastructure = data.top_infrastructure.map(item => ({
+          ...item,
+          name: item.name === false ? 'No Response' : item.name === true ? 'Unknown' : String(item.name)
+        }));
+      }
+      
+      if (data.historical_data) {
+        data.historical_data = data.historical_data.map(phase => ({
+          ...phase,
+          top_infrastructure: (phase.top_infrastructure || []).map(item => ({
+            ...item,
+            name: item.name === false ? 'No Response' : item.name === true ? 'Unknown' : String(item.name)
+          }))
+        }));
+      }
+      
+      setDashboardData(data);
+      setLastUpdate(new Date());
+      setError(null);
+      setLoading(false);
+    } catch (err) {
+      console.error('Failed to load dashboard data:', err);
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+
+  // Load data on mount and set up auto-refresh
   useEffect(() => {
-    if (dashboardData.historical_data && dashboardData.historical_data.length > 0) {
+    // Load immediately
+    fetchDashboardData();
+
+    // Auto-refresh every 5 seconds
+    const interval = setInterval(fetchDashboardData, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Initialize with latest phase when data loads
+  useEffect(() => {
+    if (dashboardData?.historical_data && dashboardData.historical_data.length > 0 && !selectedPhase) {
       const latest = dashboardData.historical_data.find(p => p.is_latest) || dashboardData.historical_data[0];
       setSelectedPhase(latest);
     }
-  }, []);
+  }, [dashboardData, selectedPhase]);
 
   const currentData = selectedPhase || dashboardData;
-  const stats = currentData.stats || dashboardData.scan_stats;
-  const infrastructure = currentData.top_infrastructure || dashboardData.top_infrastructure;
+  const stats = currentData?.stats || dashboardData?.scan_stats;
+  const infrastructure = currentData?.top_infrastructure || dashboardData?.top_infrastructure || [];
 
   // Calculate metrics
   const hitRate = stats.hit_rate_percentage || ((stats.success / stats.total) * 100);
@@ -225,6 +277,60 @@ function App() {
       });
   }, [infrastructure, query, sortKey, sortDir]);
 
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="app-container">
+        <div style={{ textAlign: 'center', padding: '40px', fontSize: '18px', color: '#666' }}>
+          <div style={{ marginBottom: '20px' }}>📊 Loading Dashboard Data...</div>
+          <div style={{ fontSize: '14px', color: '#999' }}>Fetching latest metrics from pipeline...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error || !dashboardData) {
+    return (
+      <div className="app-container">
+        <div style={{ textAlign: 'center', padding: '40px', fontSize: '18px', color: '#d32f2f' }}>
+          <div style={{ marginBottom: '20px' }}>⚠️ Error Loading Dashboard</div>
+          <div style={{ fontSize: '14px', color: '#999', marginBottom: '20px' }}>
+            {error || 'Could not load dashboard data'}
+          </div>
+          <button
+            onClick={fetchDashboardData}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#1976d2',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            🔄 Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Guard against missing stats/infrastructure
+  if (!stats || !infrastructure) {
+    return (
+      <div className="app-container">
+        <div style={{ textAlign: 'center', padding: '40px', fontSize: '18px', color: '#ff9800' }}>
+          <div>⏳ Waiting for Pipeline Data</div>
+          <div style={{ fontSize: '14px', color: '#999', marginTop: '10px' }}>
+            No data available yet. Pipeline may be running...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       {/* Header */}
@@ -235,8 +341,17 @@ function App() {
             <p className="header-subtitle">Active IPv6 Prefix Analysis & Infrastructure Mapping</p>
           </div>
           <div className="header-meta">
-            <span className="last-updated">Last Updated: {new Date(dashboardData.last_updated).toLocaleString()}</span>
-            <span className="total-phases">Phases: {dashboardData.total_phases || dashboardData.historical_data?.length}</span>
+            <span className="last-updated">
+              Last Updated: {dashboardData?.last_updated 
+                ? new Date(dashboardData.last_updated).toLocaleString()
+                : 'Loading...'}
+            </span>
+            <span className="total-phases">
+              Phases: {dashboardData?.total_phases || dashboardData?.historical_data?.length || 0}
+            </span>
+            <span style={{ fontSize: '12px', color: '#999', marginLeft: '20px' }}>
+              🔄 Auto-refresh: {lastUpdate ? `${Math.floor((Date.now() - lastUpdate.getTime()) / 1000)}s ago` : 'pending'}
+            </span>
           </div>
         </div>
       </header>

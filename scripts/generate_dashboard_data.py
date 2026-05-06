@@ -58,7 +58,8 @@ def generate_dashboard_data(current_phase=None):
     print(f"Found {len(csv_files)} metrics files. Aggregating...")
     
     # Load existing dashboard data if it exists (to preserve history)
-    output_path = Path("../dashboard/src/dashboard_data.json")
+    # Target directory - write to public folder for serving
+    output_path = Path("../dashboard/public/dashboard_data.json")
     existing_data = {}
     existing_history = {}
     
