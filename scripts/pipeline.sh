@@ -25,9 +25,9 @@
 #SBATCH --job-name=ipv6-pipeline
 #SBATCH --output=slurm-output.log
 #SBATCH --error=slurm-output.err
-#SBATCH --time=12:00:00
-#SBATCH --mem=64G
-#SBATCH --cpus-per-task=8
+#SBATCH --time=4:00:00
+#SBATCH --mem=32G
+#SBATCH --cpus-per-task=4
 # Note: Using default partition (l4)
 # Available on ailab: l4 (GPU), vmware
 # Override with: sbatch -p vmware pipeline.sh (or -p l4 explicitly)
@@ -39,6 +39,10 @@ BASE_DIR="/ceph/project/IPv6-BOS/IPv6-Crawler"
 SCRIPT_DIR="$BASE_DIR/scripts"
 PYTHON_SCRIPT="$SCRIPT_DIR/pipeline.py"
 
+# Setup GCP credentials for SLURM jobs
+# This tells gsutil where to find authentication credentials
+export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.config/gcloud/application_default_credentials.json"
+
 # Ensure logs directory exists
 mkdir -p "$BASE_DIR/logs" 2>&1 || echo "Failed to create logs directory"
 
@@ -48,6 +52,11 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Logging setup
+LOG_DIR="$BASE_DIR/logs"
+TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
+JOB_ID="${SLURM_JOB_ID:-local_${TIMESTAMP}}"
 
 # Determine input_phase from argument or use current date
 if [ $# -eq 1 ]; then
@@ -76,6 +85,12 @@ fi
 # Auto-detect current phase (today's date)
 CURRENT_PHASE=$(date +%d_%m_%y)
 
+# Setup phase-based logging (INPUT_PHASE only for easy searching)
+LOG_PREFIX="${INPUT_PHASE}"
+LOG_FILE="$LOG_DIR/phase_${LOG_PREFIX}_${JOB_ID}.log"
+ERR_FILE="$LOG_DIR/phase_${LOG_PREFIX}_${JOB_ID}.err"
+STATUS_FILE="$LOG_DIR/phase_${LOG_PREFIX}.status"
+
 echo -e "${BLUE}"
 echo "╔════════════════════════════════════════════════════════════════════╗"
 echo "║          IPv6 Crawler - Complete Pipeline Automation               ║"
@@ -83,85 +98,211 @@ echo "║                  DUAL-PHASE SLURM Compatible                       ║
 echo "╚════════════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
+# Log header to file (REPLACE if same phase)
+{
+    echo "============================================================================="
+    echo "IPv6 Crawler Pipeline Execution Log"
+    echo "============================================================================="
+    echo ""
+    echo "Execution Start: $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "Job ID: $JOB_ID"
+    echo "Input Phase (Data):     $INPUT_PHASE"
+    echo "Current Phase (Output): $CURRENT_PHASE"
+    echo ""
+} > "$LOG_FILE"  # Use > to REPLACE (not append)
+
 # Print SLURM job info if running under SLURM
 if [ -n "$SLURM_JOB_ID" ]; then
-    echo -e "${BLUE}SLURM Job Information:${NC}"
-    echo "  Job ID: $SLURM_JOB_ID"
-    echo "  Job Name: $SLURM_JOB_NAME"
-    echo "  Partition: $SLURM_JOB_PARTITION"
-    echo "  CPUs: $SLURM_CPUS_PER_TASK"
-    echo "  Memory: $SLURM_MEM_PER_NODE MB"
-    echo "  Time Limit: $SLURM_TIME_LIMIT"
-    echo ""
+    {
+        echo "SLURM Job Information:"
+        echo "  Job ID: $SLURM_JOB_ID"
+        echo "  Job Name: $SLURM_JOB_NAME"
+        echo "  Partition: $SLURM_JOB_PARTITION"
+        echo "  CPUs: $SLURM_CPUS_PER_TASK"
+        echo "  Memory: $SLURM_MEM_PER_NODE MB"
+        echo "  Time Limit: $SLURM_TIME_LIMIT"
+        echo ""
+    } >> "$LOG_FILE"  # Use >> to append after first write
 fi
 
-echo -e "${YELLOW}Phase Information:${NC}"
-echo -e "  Input Phase (Data):     ${GREEN}${INPUT_PHASE}${NC}"
-echo -e "  Current Phase (Output): ${GREEN}${CURRENT_PHASE}${NC}"
-echo -e "${YELLOW}Start Time: ${GREEN}$(date '+%Y-%m-%d %H:%M:%S')${NC}"
-echo "Starting pipeline..."
-echo ""
+{
+    echo "Phase Information:"
+    echo "  Input Phase (Data):     $INPUT_PHASE"
+    echo "  Current Phase (Output): $CURRENT_PHASE"
+    echo "  Start Time: $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "  Starting pipeline..."
+    echo ""
+} >> "$LOG_FILE"
 
 # Check if Python script exists
 if [ ! -f "$PYTHON_SCRIPT" ]; then
-    echo -e "${RED}Error: Python script not found: $PYTHON_SCRIPT${NC}"
+    {
+        echo "✗ ERROR: Python script not found: $PYTHON_SCRIPT"
+    } >> "$LOG_FILE"
+    cp "$LOG_FILE" "$ERR_FILE"
+    echo "FAILED at: validation" >> "$STATUS_FILE"
     exit 1
 fi
 
-# Check if input file exists
+# Setup input file path
 INPUT_FILE="$BASE_DIR/processed_gcloud/processed_metrics_${INPUT_PHASE}.csv"
-if [ ! -f "$INPUT_FILE" ]; then
-    echo -e "${RED}Error: Input file not found: $INPUT_FILE${NC}"
-    echo "Please ensure the GCP scan results are downloaded first:"
-    echo "  gsutil cp gs://your-bucket/processed_metrics_${INPUT_PHASE}.csv $INPUT_FILE"
-    exit 1
-fi
+GCS_SOURCE="gs://ipv6-crawler-batches/processed_at_vm/processed_metrics_${INPUT_PHASE}.csv"
 
-echo -e "${GREEN}✓ Input file found: $INPUT_FILE${NC}"
-echo ""
+# Check if input file exists locally, if not download from GCS
+if [ ! -f "$INPUT_FILE" ]; then
+    {
+        echo "📥 Input file not found locally: $INPUT_FILE"
+        echo "Attempting to download from GCS: $GCS_SOURCE"
+        echo ""
+    } >> "$LOG_FILE"
+    
+    # Try to download from GCS
+    if gsutil -m cp "$GCS_SOURCE" "$INPUT_FILE" 2>&1 >> "$LOG_FILE"; then
+        {
+            echo "✓ Successfully downloaded from GCS"
+            echo ""
+        } >> "$LOG_FILE"
+    else
+        DOWNLOAD_STATUS=$?
+        {
+            echo "✗ ERROR: Failed to download from GCS (exit code: $DOWNLOAD_STATUS)"
+            echo "  Source: $GCS_SOURCE"
+            echo "  Target: $INPUT_FILE"
+            echo ""
+            echo "Possible causes:"
+            echo "  1. File not found in GCS bucket"
+            echo "  2. GCP authentication not configured"
+            echo "     Run: gcloud auth application-default login"
+            echo "  3. No permission to access the bucket"
+            echo ""
+        } >> "$LOG_FILE"
+        
+        # Copy error to err file
+        {
+            echo "GCS Download Failed:"
+            tail -15 "$LOG_FILE" | grep -i "error\|failed\|permission\|servicexception\|commandexception"
+        } > "$ERR_FILE"
+        
+        echo "FAILED at: gcs_download - Could not download $GCS_SOURCE" >> "$STATUS_FILE"
+        exit 1
+    fi
+else
+    {
+        echo "✓ Input file found locally: $INPUT_FILE"
+        echo ""
+    } >> "$LOG_FILE"
+fi
 
 # Run the pipeline with input_phase parameter
-echo -e "${YELLOW}Activating Python environment and running pipeline...${NC}"
-echo ""
+{
+    echo "Activating Python environment and running pipeline..."
+    echo ""
+} >> "$LOG_FILE"
 
 # Use venv Python explicitly
 VENV_PYTHON="$BASE_DIR/venv/bin/python"
 if [ ! -f "$VENV_PYTHON" ]; then
-    echo -e "${RED}Error: Virtual environment Python not found: $VENV_PYTHON${NC}"
+    {
+        echo "✗ ERROR: Virtual environment Python not found: $VENV_PYTHON"
+    } >> "$LOG_FILE"
+    cp "$LOG_FILE" "$ERR_FILE"
+    echo "FAILED at: venv_validation - Python not found" >> "$STATUS_FILE"
     exit 1
 fi
 
-if "$VENV_PYTHON" "$PYTHON_SCRIPT" "$INPUT_PHASE"; then
+# Run Python pipeline and capture output to log file
+if "$VENV_PYTHON" "$PYTHON_SCRIPT" "$INPUT_PHASE" 2>&1 >> "$LOG_FILE"; then
+    PIPELINE_STATUS=0
+else
+    PIPELINE_STATUS=$?
+fi
+
+# Capture errors separately
+if [ $PIPELINE_STATUS -ne 0 ]; then
+    tail -100 "$LOG_FILE" >> "$ERR_FILE"
+fi
+if [ $PIPELINE_STATUS -eq 0 ]; then
     END_TIME=$(date '+%Y-%m-%d %H:%M:%S')
-    echo ""
-    echo -e "${GREEN}╔════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║ ✓ Pipeline completed successfully!                               ║${NC}"
-    echo -e "${GREEN}╚════════════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo -e "${GREEN}End Time: ${END_TIME}${NC}"
-    echo -e "${GREEN}Results:${NC}"
-    echo -e "  Candidates: results/candidates_${CURRENT_PHASE}.parquet"
-    echo -e "  Model: models/prefix_model_${CURRENT_PHASE}.pkl"
-    echo -e "${GREEN}Cloud Path: gs://ipv6-crawler-batches/batches/candidates_${CURRENT_PHASE}.parquet${NC}"
+    {
+        echo ""
+        echo "=============================================================================="
+        echo "✓ Pipeline completed successfully!"
+        echo "=============================================================================="
+        echo ""
+        echo "Execution Summary:"
+        echo "  Input Phase:   $INPUT_PHASE"
+        echo "  Current Phase: $CURRENT_PHASE"
+        echo "  End Time:      $END_TIME"
+        echo ""
+        echo "Results:"
+        echo "  Candidates: results/candidates_${CURRENT_PHASE}.parquet"
+        echo "  Model: models/prefix_model_${CURRENT_PHASE}.pkl"
+        echo ""
+        echo "Cloud Path: gs://ipv6-crawler-batches/batches/candidates_${CURRENT_PHASE}.parquet"
+        echo ""
+    } >> "$LOG_FILE"
+    
+    # Record success in status file
+    echo "SUCCESS|$(date '+%Y-%m-%d %H:%M:%S')|$INPUT_PHASE|$CURRENT_PHASE|$JOB_ID" >> "$STATUS_FILE"
     
     if [ -n "$SLURM_JOB_ID" ]; then
-        echo -e "${GREEN}SLURM Job: $SLURM_JOB_ID completed successfully${NC}"
-        echo -e "${YELLOW}View logs: cat logs/pipeline_${SLURM_JOB_ID}.log${NC}"
+        {
+            echo "SLURM Job: $SLURM_JOB_ID completed successfully"
+            echo ""
+            echo "📋 Logs:"
+            echo "  Main Log:  logs/phase_${LOG_PREFIX}_${JOB_ID}.log"
+            echo "  Query:     grep -i 'phase\|error\|failed\|success' logs/phase_${LOG_PREFIX}_*.log"
+            echo "  Status:    cat logs/phase_${LOG_PREFIX}.status"
+        } >> "$LOG_FILE"
     fi
     
     exit 0
 else
     END_TIME=$(date '+%Y-%m-%d %H:%M:%S')
-    echo ""
-    echo -e "${RED}╔════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${RED}║ ✗ Pipeline failed. Check logs above for details.                  ║${NC}"
-    echo -e "${RED}╚════════════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo -e "${RED}End Time: ${END_TIME}${NC}"
+    {
+        echo ""
+        echo "=============================================================================="
+        echo "✗ Pipeline FAILED"
+        echo "=============================================================================="
+        echo ""
+        echo "Failure Summary:"
+        echo "  Input Phase:   $INPUT_PHASE"
+        echo "  Current Phase: $CURRENT_PHASE"
+        echo "  End Time:      $END_TIME"
+        echo "  Exit Code:     $PIPELINE_STATUS"
+        echo ""
+        echo "Error Details:"
+        echo "  See error messages in section above marked with [✗ ERROR]"
+        echo ""
+    } >> "$LOG_FILE"
+    
+    # Capture error reason from log file
+    ERROR_REASON=$(grep -i "✗ ERROR" "$LOG_FILE" | tail -1 | sed 's/.*\[✗ ERROR\] //' || echo "Unknown error - check logs")
+    
+    # Record failure in status file with error reason
+    {
+        echo "FAILED|$(date '+%Y-%m-%d %H:%M:%S')|$INPUT_PHASE|$CURRENT_PHASE|$JOB_ID"
+        echo "Error: $ERROR_REASON"
+    } >> "$STATUS_FILE"
+    
+    # Copy last 50 lines to error file
+    tail -50 "$LOG_FILE" > "$ERR_FILE"
     
     if [ -n "$SLURM_JOB_ID" ]; then
-        echo -e "${RED}SLURM Job: $SLURM_JOB_ID failed${NC}"
-        echo -e "${YELLOW}View logs: cat logs/pipeline_${SLURM_JOB_ID}.log${NC}"
+        {
+            echo "SLURM Job: $SLURM_JOB_ID FAILED"
+            echo ""
+            echo "📋 Log Files:"
+            echo "  Main Log:  logs/phase_${LOG_PREFIX}_${JOB_ID}.log"
+            echo "  Error Log: logs/phase_${LOG_PREFIX}_${JOB_ID}.err"
+            echo "  Status:    logs/phase_${LOG_PREFIX}.status"
+            echo ""
+            echo "🔍 View Last 30 Lines:"
+            echo "  tail -30 logs/phase_${LOG_PREFIX}_${JOB_ID}.log"
+            echo ""
+            echo "❌ Last Error:"
+            echo "  $ERROR_REASON"
+        } >> "$LOG_FILE"
     fi
     
     exit 1

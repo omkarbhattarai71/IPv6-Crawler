@@ -444,34 +444,50 @@ def main():
     logger.info(f"Output model: {paths['model_pkl'].name}")
     logger.info(f"Output candidates: {paths['output'].name}")
     
-    # Execute pipeline
-    success = True
+    # Execute pipeline with phase tracking
+    failed_phase = None
     
+    logger.section("PHASE 1: Building Features")
     if not build_features(input_phase, paths, logger):
-        success = False
-    elif not train_model(input_phase, current_phase, paths, logger):
-        success = False
-    elif not generate_candidates(input_phase, current_phase, paths, logger):
-        success = False
-    elif not upload_to_cloud(current_phase, paths, logger):
-        success = False
-    elif not update_dashboard(input_phase, logger):
-        # Don't fail pipeline if dashboard update fails
-        logger.error("Dashboard update failed, but continuing...")
+        failed_phase = "PHASE 1: Building Features"
+    
+    if failed_phase is None:
+        logger.section("PHASE 2: Training Model")
+        if not train_model(input_phase, current_phase, paths, logger):
+            failed_phase = "PHASE 2: Training Model"
+    
+    if failed_phase is None:
+        logger.section("PHASE 3: Generating Candidates")
+        if not generate_candidates(input_phase, current_phase, paths, logger):
+            failed_phase = "PHASE 3: Generating Candidates"
+    
+    if failed_phase is None:
+        logger.section("PHASE 4: Uploading to Cloud")
+        if not upload_to_cloud(current_phase, paths, logger):
+            failed_phase = "PHASE 4: Uploading to Cloud"
+    
+    if failed_phase is None:
+        logger.section("PHASE 5: Updating Dashboard")
+        if not update_dashboard(input_phase, logger):
+            # Don't fail pipeline if dashboard update fails - just log warning
+            logger.error("PHASE 5: Dashboard update failed, but continuing...")
     
     # Final summary
     logger.section("Pipeline Summary")
     
-    if success:
+    if failed_phase is None:
         elapsed = datetime.now() - logger.start_time
-        logger.success(f"✓ COMPLETE - All steps finished successfully in {elapsed}")
+        logger.success(f"✓ COMPLETE - All phases finished successfully in {elapsed}")
+        logger.info(f"Input Phase → Current Phase: {input_phase} → {current_phase}")
         logger.info(f"Candidates: gs://ipv6-crawler-batches/batches/candidates_{current_phase}.parquet")
         logger.info(f"Model: {paths['model_pkl'].name}")
         return 0
     else:
         elapsed = datetime.now() - logger.start_time
-        logger.error(f"✗ FAILED - Pipeline did not complete in {elapsed}")
-        logger.error("Check logs above for details")
+        logger.error(f"✗ FAILED - {failed_phase}")
+        logger.error(f"Input Phase → Current Phase: {input_phase} → {current_phase}")
+        logger.error(f"Time elapsed: {elapsed}")
+        logger.error("Review the error messages above to identify the cause")
         return 1
 
 
