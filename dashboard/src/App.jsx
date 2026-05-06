@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -159,6 +159,8 @@ function App() {
   const [sortKey, setSortKey] = useState('count');
   const [sortDir, setSortDir] = useState('desc');
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [isHeaderHidden, setIsHeaderHidden] = useState(false);
+  const lastScrollYRef = useRef(0);
 
   // Fetch dashboard data
   const fetchDashboardData = async () => {
@@ -209,6 +211,36 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Compact header on scroll, hide while scrolling down
+  useEffect(() => {
+    lastScrollYRef.current = window.scrollY;
+    let ticking = false;
+
+    const onScroll = () => {
+      const currentScrollY = window.scrollY;
+      const delta = currentScrollY - lastScrollYRef.current;
+
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const hideOn = currentScrollY > 120 && delta > 6;
+          const hideOff = currentScrollY < 80 || delta < -6;
+
+          setIsHeaderHidden(prev => {
+            const next = prev ? !hideOff : hideOn;
+            return next === prev ? prev : next;
+          });
+
+          lastScrollYRef.current = currentScrollY;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   // Initialize with latest phase when data loads
   useEffect(() => {
     if (dashboardData?.historical_data && dashboardData.historical_data.length > 0 && !selectedPhase) {
@@ -221,23 +253,18 @@ function App() {
   const stats = currentData?.stats || dashboardData?.scan_stats;
   const infrastructure = currentData?.top_infrastructure || dashboardData?.top_infrastructure || [];
 
-  // Calculate metrics
-  const hitRate = stats.hit_rate_percentage || ((stats.success / stats.total) * 100);
-  const failRate = 100 - hitRate;
-  const successRatio = (stats.success / stats.total) * 100;
-
   // Trend calculation (comparing with previous phase)
   const trendHitRate = useMemo(() => {
-    if (!dashboardData.historical_data || dashboardData.historical_data.length < 2) return 0;
+    if (!dashboardData?.historical_data || dashboardData.historical_data.length < 2) return 0;
     const sorted = [...dashboardData.historical_data].sort((a, b) => new Date(b.date) - new Date(a.date));
     const current = sorted[0];
     const previous = sorted[1];
     return ((current.stats.hit_rate_percentage - previous.stats.hit_rate_percentage) / previous.stats.hit_rate_percentage) * 100;
-  }, []);
+  }, [dashboardData]);
 
   // Prepare historical trend data
   const trendData = useMemo(() => {
-    if (!dashboardData.historical_data) return [];
+    if (!dashboardData?.historical_data) return [];
     return dashboardData.historical_data
       .slice()
       .sort((a, b) => new Date(a.date) - new Date(b.date))
@@ -249,11 +276,11 @@ function App() {
         failed: item.stats.failed,
         total: item.stats.total
       }));
-  }, []);
+  }, [dashboardData]);
 
   // Success vs Failed comparison data
   const comparisonData = useMemo(() => {
-    if (!dashboardData.historical_data) return [];
+    if (!dashboardData?.historical_data) return [];
     return dashboardData.historical_data
       .slice()
       .sort((a, b) => new Date(a.date) - new Date(b.date))
@@ -263,7 +290,7 @@ function App() {
         Failed: item.stats.failed,
         total: item.stats.total
       }));
-  }, []);
+  }, [dashboardData]);
 
   // Filtered infrastructure data
   const filteredInfra = useMemo(() => {
@@ -331,26 +358,41 @@ function App() {
     );
   }
 
+  // Calculate metrics (now safe after guard check)
+  const hitRate = stats.hit_rate_percentage || ((stats.success / stats.total) * 100);
+  const failRate = 100 - hitRate;
+  const successRatio = (stats.success / stats.total) * 100;
+
   return (
     <div className="app-container">
       {/* Header */}
-      <header className="app-header">
+      <header className={`app-header${isHeaderHidden ? ' is-hidden' : ''}`}>
         <div className="header-content">
-          <div>
+          <div className="header-title">
+            <span className="header-kicker">IPv6 Crawler</span>
             <h1>IPv6 Crawler Dashboard</h1>
             <p className="header-subtitle">Active IPv6 Prefix Analysis & Infrastructure Mapping</p>
           </div>
           <div className="header-meta">
-            <span className="last-updated">
-              Last Updated: {dashboardData?.last_updated 
-                ? new Date(dashboardData.last_updated).toLocaleString()
-                : 'Loading...'}
+            <span className="meta-pill">
+              <span className="meta-label">Last Updated</span>
+              <span className="meta-value">
+                {dashboardData?.last_updated
+                  ? new Date(dashboardData.last_updated).toLocaleString()
+                  : 'Loading...'}
+              </span>
             </span>
-            <span className="total-phases">
-              Phases: {dashboardData?.total_phases || dashboardData?.historical_data?.length || 0}
+            <span className="meta-pill">
+              <span className="meta-label">Phases</span>
+              <span className="meta-value">
+                {dashboardData?.total_phases || dashboardData?.historical_data?.length || 0}
+              </span>
             </span>
-            <span style={{ fontSize: '12px', color: '#999', marginLeft: '20px' }}>
-              🔄 Auto-refresh: {lastUpdate ? `${Math.floor((Date.now() - lastUpdate.getTime()) / 1000)}s ago` : 'pending'}
+            <span className="meta-pill">
+              <span className="meta-label">Auto-refresh</span>
+              <span className="meta-value">
+                {lastUpdate ? `${Math.floor((Date.now() - lastUpdate.getTime()) / 1000)}s ago` : 'pending'}
+              </span>
             </span>
           </div>
         </div>

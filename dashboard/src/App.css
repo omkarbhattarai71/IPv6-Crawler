@@ -1,7 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap');
+
 /* Advanced IPv6 Dashboard Styling */
 
 :root {
-  --primary-color: #4e79a7;
+  --primary-color: #2d5fff;
   --secondary-color: #59a14f;
   --danger-color: #e15759;
   --warning-color: #f28e2b;
@@ -17,6 +19,9 @@
   --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.15);
   --shadow-xl: 0 12px 24px rgba(0, 0, 0, 0.18);
   --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --header-grad: radial-gradient(1200px 600px at 15% -20%, rgba(255, 255, 255, 0.28), transparent 55%),
+    linear-gradient(120deg, #0b1a3d 0%, #123a7a 45%, #2d5fff 100%);
+  --header-glow: rgba(72, 129, 255, 0.35);
 }
 
 * {
@@ -26,9 +31,7 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
@@ -44,50 +47,118 @@ body {
 }
 
 .app-header {
-  background: linear-gradient(135deg, var(--primary-color) 0%, #3d5f7e 100%);
+  background: var(--header-grad);
   color: white;
   padding: 2.5rem 2rem;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 20px 40px rgba(6, 19, 46, 0.35);
   position: sticky;
   top: 0;
   z-index: 100;
+  transition: padding 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+  overflow: hidden;
+}
+
+.app-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(600px 220px at 70% -20%, rgba(255, 255, 255, 0.35), transparent 65%);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.app-header::after {
+  content: '';
+  position: absolute;
+  right: -12%;
+  bottom: -55%;
+  width: 480px;
+  height: 480px;
+  background: radial-gradient(circle, var(--header-glow), transparent 70%);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.app-header.is-hidden {
+  transform: translateY(-110%);
+  pointer-events: none;
 }
 
 .header-content {
-  max-width: 1400px;
+  max-width: 1600px;
   margin: 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
   gap: 1.5rem;
+  position: relative;
+  z-index: 1;
+  padding-inline: clamp(0.5rem, 2vw, 1.5rem);
+}
+
+.header-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.header-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.2rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.65);
 }
 
 .app-header h1 {
-  font-size: 2.5rem;
+  font-size: 2.6rem;
   font-weight: 700;
   letter-spacing: -0.5px;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.3rem;
 }
 
 .header-subtitle {
   font-size: 1rem;
   opacity: 0.95;
   font-weight: 300;
+  max-width: 560px;
 }
 
 .header-meta {
   display: flex;
-  gap: 2rem;
-  font-size: 0.95rem;
-  opacity: 0.9;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+  opacity: 0.95;
+  flex-wrap: wrap;
 }
 
-.last-updated, .total-phases {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+
+.meta-pill {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  min-width: 140px;
 }
+
+.meta-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.meta-value {
+  font-size: 0.92rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+}
+
 
 .app-body {
   flex: 1;
