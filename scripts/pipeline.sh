@@ -39,8 +39,7 @@ BASE_DIR="/ceph/project/IPv6-BOS/IPv6-Crawler"
 SCRIPT_DIR="$BASE_DIR/scripts"
 PYTHON_SCRIPT="$SCRIPT_DIR/pipeline.py"
 
-# Setup GCP credentials for SLURM jobs
-# This tells gsutil where to find authentication credentials
+# Setup GCP credentials for SLURM jobs - use gcloud application-default credentials
 export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.config/gcloud/application_default_credentials.json"
 
 # Ensure logs directory exists
@@ -156,8 +155,8 @@ if [ ! -f "$INPUT_FILE" ]; then
         echo ""
     } >> "$LOG_FILE"
     
-    # Try to download from GCS
-    if gsutil -m cp "$GCS_SOURCE" "$INPUT_FILE" 2>&1 >> "$LOG_FILE"; then
+    # Try to download from GCS using gcloud storage (handles ADC better than gsutil)
+    if gcloud storage cp "$GCS_SOURCE" "$INPUT_FILE" 2>&1 >> "$LOG_FILE"; then
         {
             echo "✓ Successfully downloaded from GCS"
             echo ""
