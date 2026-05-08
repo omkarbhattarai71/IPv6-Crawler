@@ -49,13 +49,15 @@ body {
 .app-header {
   background: var(--header-grad);
   color: white;
-  padding: 2.5rem 2rem;
-  box-shadow: 0 20px 40px rgba(6, 19, 46, 0.35);
+  padding: 0.6rem 1rem;
+  box-shadow: 0 6px 18px rgba(6, 19, 46, 0.18);
   position: sticky;
   top: 0;
-  z-index: 100;
-  transition: padding 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+  z-index: 1000;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, padding 0.25s ease;
   overflow: hidden;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  backdrop-filter: blur(4px);
 }
 
 .app-header::before {
@@ -131,6 +133,40 @@ body {
   font-size: 0.9rem;
   opacity: 0.95;
   flex-wrap: wrap;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.header-btn {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border-radius: 10px;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.header-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.header-btn.secondary {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.header-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 
@@ -414,9 +450,43 @@ body {
 /* Charts Grid */
 .charts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 1.25rem;
   margin-bottom: 2rem;
+  align-items: start;
+}
+
+/* Hero header styles (scrollable) */
+.hero-header {
+  background: transparent;
+  padding: 2.2rem 1rem 1rem;
+  text-align: center;
+}
+.hero-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.hero-header h1 {
+  font-size: 2.4rem;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+.hero-sub {
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+/* Ensure charts have breathing room for axis labels */
+.chart-card { padding-bottom: 1.6rem; }
+.chart-card .recharts-wrapper { overflow: visible !important; }
+
+@media (max-width: 640px) {
+  .hero-header h1 { font-size: 1.4rem; }
+  .hero-sub { font-size: 0.95rem; }
+  .chart-card { padding: 1rem; }
+  .app-body { padding: 1rem; }
+  .meta-pill { min-width: 120px; }
+  .header-btn { font-size: 0.75rem; padding: 0.42rem 0.55rem; }
 }
 
 .chart-card {
@@ -425,6 +495,7 @@ body {
   padding: 1.5rem;
   box-shadow: var(--shadow-md);
   transition: var(--transition);
+  overflow: visible;
 }
 
 .chart-card:hover {
@@ -446,6 +517,7 @@ body {
 /* Chart container with subtitle */
 .chart-container {
   width: 100%;
+  padding-inline: clamp(12px, 3vw, 36px);
 }
 
 .chart-container h5 {
@@ -464,6 +536,7 @@ body {
 
 .recharts-surface {
   border-radius: 8px;
+  overflow: visible;
 }
 
 .recharts-tooltip-wrapper {

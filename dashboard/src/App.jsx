@@ -5,6 +5,7 @@ import {
   Cell, ScatterChart, Scatter, ComposedChart, RadarChart, PolarGrid,
   PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
+import { LabelList } from 'recharts';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
 
@@ -175,38 +176,52 @@ const PortReachabilityChart = ({ portStats }) => {
 
   const COLORS = ['#4e79a7', '#59a14f', '#f28e2b', '#e15759', '#76b7b2', '#bab0ac'];
 
+  const formatNumberShort = (v) => {
+    if (v >= 1000000) return `${(v / 1000000).toFixed(1)}M`;
+    if (v >= 1000) return `${(v / 1000).toFixed(1)}k`;
+    return String(v);
+  };
+
   return (
     <div className="chart-container">
       <h5>🌐 Port Reachability Analysis</h5>
       <p className="section-subtitle">Count of IPs responding on each protocol (TRUE = responsive)</p>
       <ResponsiveContainer width="100%" height={350}>
-        <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 80 }}>
+        <BarChart data={data} margin={{ top: 20, right: 90, left: 80, bottom: 60 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-          <XAxis 
-            dataKey="name" 
-            angle={-45} 
-            textAnchor="end" 
-            height={100}
+          <XAxis
+            dataKey="name"
+            angle={-30}
+            textAnchor="end"
+            height={70}
             interval={0}
             tick={{ fontSize: 12 }}
+            tickFormatter={(val) => val}
           />
-          <YAxis 
+          <YAxis
             label={{ value: 'Responsive IPs', angle: -90, position: 'insideLeft' }}
             yAxisId="left"
+            tickFormatter={formatNumberShort}
+            width={80}
           />
-          <YAxis 
+          <YAxis
             orientation="right"
             yAxisId="right"
             label={{ value: 'Response Rate (%)', angle: 90, position: 'insideRight' }}
+            domain={[0, 100]}
+            ticks={[0,25,50,75,100]}
+            tickFormatter={(v) => `${v}%`}
+            width={80}
           />
           <Tooltip
             contentStyle={{ backgroundColor: '#f9f9f9', border: '1px solid #ccc', borderRadius: '4px' }}
             formatter={(value, name) => {
-              if (name === 'percentage') return [`${value.toFixed(2)}%`, 'Response Rate'];
-              if (name === 'responsive') return [value.toLocaleString(), 'Responsive IPs'];
+              if (value == null) return ['0', name];
+              if (name === 'percentage') return [`${Number(value).toFixed(2)}%`, 'Response Rate'];
+              if (name === 'responsive') return [Number(value).toLocaleString(), 'Responsive IPs'];
               return [value, name];
             }}
-            labelFormatter={(label) => `${label} (${data.find(d => d.name === label)?.protocol})`}
+            labelFormatter={(label) => `${label} (${data.find(d => d.name === label)?.protocol || ''})`}
           />
           <Legend />
           <Bar yAxisId="left" dataKey="responsive" fill="#4e79a7" radius={[8, 8, 0, 0]} name="Responsive IPs">
@@ -214,14 +229,15 @@ const PortReachabilityChart = ({ portStats }) => {
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Bar>
-          <Line 
+          <Line
             yAxisId="right"
-            type="monotone" 
-            dataKey="percentage" 
-            stroke="#f28e2b" 
-            strokeWidth={2} 
+            type="monotone"
+            dataKey="percentage"
+            stroke="#f28e2b"
+            strokeWidth={2}
             dot={{ r: 5 }}
             name="Response Rate (%)"
+            isAnimationActive={false}
           />
         </BarChart>
       </ResponsiveContainer>
@@ -324,27 +340,41 @@ const StatusDistributionChart = ({ statusData }) => {
 
 // Multi-Port Analysis Component
 const MultiPortAnalysisChart = ({ multiPortData }) => {
-  if (!multiPortData || multiPortData.length === 0) return null;
+  if (!multiPortData) return null;
 
-  const data = multiPortData.sort((a, b) => a.ports - b.ports);
+  if (!Array.isArray(multiPortData) || multiPortData.length === 0) return null;
+
+  // clone and sanitize data to avoid mutating props and to handle missing/invalid values
+  const data = multiPortData
+    .map(item => ({
+      ports: Number.isFinite(Number(item?.ports)) ? Number(item.ports) : 0,
+      count: Number.isFinite(Number(item?.count)) ? Number(item.count) : 0,
+      percentage: Number.isFinite(Number(item?.percentage)) ? Number(item.percentage) : 0,
+      label: item?.label || String(item?.ports || 0)
+    }))
+    .sort((a, b) => a.ports - b.ports);
 
   return (
     <div className="chart-container">
       <h5>🔌 Multi-Port Analysis</h5>
       <p className="section-subtitle">How many IPs respond to multiple ports</p>
       <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+        <BarChart data={data} margin={{ top: 20, right: 16, left: 16, bottom: 48 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-          <XAxis dataKey="ports" label={{ value: 'Number of Ports', position: 'insideBottomRight', offset: -5 }} />
-          <YAxis label={{ value: 'IP Count', angle: -90, position: 'insideLeft' }} />
+          <XAxis dataKey="ports" label={{ value: 'Number of Ports', position: 'insideBottom', offset: -5 }} tick={{ fontSize: 12 }} />
+          <YAxis tickFormatter={(v) => (v >= 1000 ? `${(v/1000).toFixed(1)}k` : String(v))} width={42} />
           <Tooltip
             contentStyle={{ backgroundColor: '#f9f9f9', border: '1px solid #ccc' }}
-            formatter={(value, name) => [
-              value.toLocaleString(),
-              name === 'count' ? 'IPs' : name
-            ]}
+            formatter={(value, name) => {
+              const val = value == null ? 0 : value;
+              const label = name === 'count' ? 'IPs' : name;
+              const display = typeof val === 'number' ? val.toLocaleString() : String(val);
+              return [display, label];
+            }}
           />
-          <Bar dataKey="count" fill="#76b7b2" radius={[8, 8, 0, 0]} />
+          <Bar dataKey="count" fill="#76b7b2" radius={[8, 8, 0, 0]}>
+            <LabelList dataKey="count" position="top" formatter={(v) => (typeof v === 'number' ? v.toLocaleString() : v)} />
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -365,16 +395,22 @@ const TemporalTrendsChart = ({ scanHistory }) => {
       totalIPs: scan.total_ips || 0
     }));
 
+  const formatNumberShort = (v) => {
+    if (v >= 1000000) return `${(v / 1000000).toFixed(1)}M`;
+    if (v >= 1000) return `${(v / 1000).toFixed(1)}k`;
+    return String(v);
+  };
+
   return (
     <div className="chart-container">
       <h5>📈 Temporal Trends</h5>
       <p className="section-subtitle">Response rates over time across scans</p>
       <ResponsiveContainer width="100%" height={300}>
-        <ComposedChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 60 }}>
+        <ComposedChart data={data} margin={{ top: 20, right: 80, left: 0, bottom: 80 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
           <XAxis dataKey="date" angle={-45} textAnchor="end" height={80} />
-          <YAxis yAxisId="left" label={{ value: 'Response Rate (%)', angle: -90, position: 'insideLeft' }} />
-          <YAxis yAxisId="right" orientation="right" label={{ value: 'IP Count', angle: 90, position: 'insideRight' }} />
+          <YAxis yAxisId="left" label={{ value: 'Response Rate (%)', angle: -90, position: 'insideLeft' }} tickFormatter={(v) => `${v}%`} />
+          <YAxis yAxisId="right" orientation="right" label={{ value: 'IP Count', angle: 90, position: 'insideRight' }} width={80} tickFormatter={formatNumberShort} />
           <Tooltip
             contentStyle={{ backgroundColor: '#f9f9f9', border: '1px solid #ccc' }}
             formatter={(value, name) => {
@@ -419,11 +455,21 @@ function App() {
   const [sortDir, setSortDir] = useState('desc');
   const [lastUpdate, setLastUpdate] = useState(null);
   const [isHeaderHidden, setIsHeaderHidden] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(5);
+  const [dashboardMode, setDashboardMode] = useState('hybrid');
   const lastScrollYRef = useRef(0);
 
+  const refreshIntervalSec = useMemo(() => {
+    const configured = Number(dashboardData?.refresh_interval_seconds);
+    return Number.isFinite(configured) && configured > 0 ? Math.max(3, Math.floor(configured)) : 5;
+  }, [dashboardData]);
+
   // Fetch dashboard data
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async ({ silent = false } = {}) => {
     try {
+      if (!silent) setIsRefreshing(true);
       // Add cache-busting parameter to force fresh data
       const response = await fetch(`/dashboard_data.json?t=${Date.now()}`);
       if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
@@ -473,19 +519,39 @@ function App() {
       console.error('Failed to load dashboard data:', err);
       setError(err.message);
       setLoading(false);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
-  // Load data on mount and set up auto-refresh
+  // Load data on mount
   useEffect(() => {
-    // Load immediately
-    fetchDashboardData();
-
-    // Auto-refresh every 5 seconds
-    const interval = setInterval(fetchDashboardData, 5000);
-
-    return () => clearInterval(interval);
+    fetchDashboardData({ silent: false });
   }, []);
+
+  // Auto-refresh polling
+  useEffect(() => {
+    if (!autoRefreshEnabled) return undefined;
+    const interval = setInterval(() => {
+      fetchDashboardData({ silent: true });
+    }, refreshIntervalSec * 1000);
+    return () => clearInterval(interval);
+  }, [autoRefreshEnabled, refreshIntervalSec]);
+
+  // UI countdown until next automatic refresh
+  useEffect(() => {
+    if (!autoRefreshEnabled) {
+      setSecondsUntilRefresh(0);
+      return undefined;
+    }
+
+    setSecondsUntilRefresh(refreshIntervalSec);
+    const countdown = setInterval(() => {
+      setSecondsUntilRefresh((prev) => (prev <= 1 ? refreshIntervalSec : prev - 1));
+    }, 1000);
+
+    return () => clearInterval(countdown);
+  }, [autoRefreshEnabled, refreshIntervalSec, lastUpdate]);
 
   // Compact header on scroll, hide while scrolling down
   useEffect(() => {
@@ -539,6 +605,7 @@ function App() {
   const infrastructure = currentScan?.top_infrastructure || dashboardData?.top_infrastructure || [];
   const hasInfra = Array.isArray(infrastructure) && infrastructure.length > 0;
   const infraTotal = currentScan?.stats?.success ?? currentScan?.successful_ips ?? successfulIps ?? 1;
+  const isLegacyModeActive = dashboardMode === 'legacy' && hasInfra;
 
   const filteredInfra = useMemo(() => {
     if (!hasInfra) return [];
@@ -610,42 +677,84 @@ function App() {
 
   return (
     <div className="app-container">
-      {/* Header */}
+      {/* Compact Attached Header */}
       <header className={`app-header${isHeaderHidden ? ' is-hidden' : ''}`}>
-        <div className="header-content">
-          <div className="header-title">
-            <span className="header-kicker">IPv6 Crawler</span>
-            <h1>IPv6 Crawler Dashboard</h1>
-            <p className="header-subtitle">Active IPv6 Prefix Analysis & Infrastructure Mapping</p>
+        <div className="header-content" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ fontWeight: 700, fontSize: '1rem', letterSpacing: '0.02rem' }}>
+              IPv6 - Crawler : Aalborg University
+            </div>
           </div>
-          <div className="header-meta">
+
+          <div className="header-actions">
             <span className="meta-pill">
-              <span className="meta-label">Last Updated</span>
+              <span className="meta-label">Data Timestamp</span>
               <span className="meta-value">
-                {dashboardData?.last_updated
-                  ? new Date(dashboardData.last_updated).toLocaleString()
-                  : 'Loading...'}
+                {dashboardData?.last_updated ? new Date(dashboardData.last_updated).toLocaleString() : 'Unavailable'}
               </span>
             </span>
+
             <span className="meta-pill">
-              <span className="meta-label">Phases</span>
+              <span className="meta-label">Refresh</span>
               <span className="meta-value">
-                {dashboardData?.total_scans || scans.length || 0}
+                {autoRefreshEnabled ? `in ${secondsUntilRefresh}s` : 'Paused'}
               </span>
             </span>
+
             <span className="meta-pill">
-              <span className="meta-label">Auto-refresh</span>
+              <span className="meta-label">Last Sync</span>
               <span className="meta-value">
-                {lastUpdate ? `${Math.floor((Date.now() - lastUpdate.getTime()) / 1000)}s ago` : 'pending'}
+                {lastUpdate ? `${Math.max(0, Math.floor((Date.now() - lastUpdate.getTime()) / 1000))}s ago` : 'Pending'}
               </span>
             </span>
+
+            <button
+              type="button"
+              className="header-btn"
+              onClick={() => fetchDashboardData({ silent: false })}
+              disabled={isRefreshing}
+              title="Refresh now"
+            >
+              {isRefreshing ? 'Refreshing...' : 'Refresh Now'}
+            </button>
+
+            <button
+              type="button"
+              className="header-btn secondary"
+              onClick={() => setAutoRefreshEnabled((prev) => !prev)}
+              title="Toggle auto-refresh"
+            >
+              {autoRefreshEnabled ? 'Auto: ON' : 'Auto: OFF'}
+            </button>
+
+            <button
+              type="button"
+              className="header-btn secondary"
+              onClick={() => setDashboardMode((prev) => (prev === 'hybrid' ? 'legacy' : 'hybrid'))}
+              title="Toggle dashboard view mode"
+            >
+              {dashboardMode === 'hybrid' ? 'Mode: Hybrid' : 'Mode: Legacy'}
+            </button>
           </div>
         </div>
       </header>
 
       <div className="app-body">
+        {/* Hero header (scrollable) - previous dashboard header retained */}
+        <section className="hero-header">
+          <div className="hero-inner">
+            <h1>IPv6 Crawler Dashboard</h1>
+            <p className="hero-sub">Active IPv6 Prefix Analysis & Infrastructure Mapping</p>
+          </div>
+        </section>
         {/* KPI Section */}
         <section className="kpi-section">
+          {dashboardMode === 'legacy' && !hasInfra && (
+            <div style={{ marginBottom: '1rem', padding: '0.8rem 1rem', borderRadius: '10px', background: '#eef5ff', color: '#1f3b66', border: '1px solid #d5e4ff' }}>
+              Legacy-only view requested, but this dataset does not include full legacy infrastructure blocks. Showing hybrid metrics instead.
+            </div>
+          )}
+
           <div className="kpi-grid">
             <MetricCard
               title="Total IPs"
@@ -702,28 +811,28 @@ function App() {
         {/* Charts Grid */}
         <div className="charts-grid">
           {/* NEW: Port Reachability (if available) */}
-          {currentScan?.port_stats && (
+          {!isLegacyModeActive && currentScan?.port_stats && (
             <div className="chart-card full-width">
               <PortReachabilityChart portStats={currentScan.port_stats} />
             </div>
           )}
 
           {/* NEW: Status Distribution (if available) */}
-          {currentScan?.status_distribution && (
+          {!isLegacyModeActive && currentScan?.status_distribution && (
             <div className="chart-card">
               <StatusDistributionChart statusData={currentScan.status_distribution} />
             </div>
           )}
 
           {/* NEW: Multi-Port Analysis (if available) */}
-          {currentScan?.multi_port_analysis && currentScan.multi_port_analysis.length > 0 && (
+          {!isLegacyModeActive && currentScan?.multi_port_analysis && currentScan.multi_port_analysis.length > 0 && (
             <div className="chart-card">
               <MultiPortAnalysisChart multiPortData={currentScan.multi_port_analysis} />
             </div>
           )}
 
           {/* NEW: Temporal Trends (if available) */}
-          {scans.length > 1 && (
+          {!isLegacyModeActive && scans.length > 1 && (
             <div className="chart-card full-width">
               <TemporalTrendsChart scanHistory={scans} />
             </div>
