@@ -438,6 +438,30 @@ body {
   font-size: 1rem;
 }
 
+/* Full-width chart card spanning entire grid */
+.chart-card.full-width {
+  grid-column: 1 / -1;
+}
+
+/* Chart container with subtitle */
+.chart-container {
+  width: 100%;
+}
+
+.chart-container h5 {
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.section-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+  font-weight: 400;
+}
+
 .recharts-surface {
   border-radius: 8px;
 }

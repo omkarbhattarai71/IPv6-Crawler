@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  Cell, ScatterChart, Scatter, ComposedChart
+  Cell, ScatterChart, Scatter, ComposedChart, RadarChart, PolarGrid,
+  PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
@@ -149,6 +150,264 @@ const InfrastructureBreakdown = ({ data, totalSuccess }) => {
   );
 };
 
+// Port Reachability Analysis Component
+const PortReachabilityChart = ({ portStats }) => {
+  if (!portStats || Object.keys(portStats).length === 0) return null;
+
+  const portNameMap = {
+    'icmp': 'ICMP',
+    'tcp80': 'TCP 80 (HTTP)',
+    'tcp443': 'TCP 443 (HTTPS)',
+    'tcp8080': 'TCP 8080',
+    'tcp8443': 'TCP 8443',
+    'udp53': 'UDP 53 (DNS)'
+  };
+
+  const data = Object.entries(portStats)
+    .map(([port, stats]) => ({
+      name: portNameMap[port] || port.toUpperCase(),
+      shortName: port.toUpperCase(),
+      percentage: stats.percentage,
+      responsive: stats.responsive,
+      protocol: port
+    }))
+    .sort((a, b) => b.percentage - a.percentage);
+
+  const COLORS = ['#4e79a7', '#59a14f', '#f28e2b', '#e15759', '#76b7b2', '#bab0ac'];
+
+  return (
+    <div className="chart-container">
+      <h5>🌐 Port Reachability Analysis</h5>
+      <p className="section-subtitle">Count of IPs responding on each protocol (TRUE = responsive)</p>
+      <ResponsiveContainer width="100%" height={350}>
+        <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 80 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+          <XAxis 
+            dataKey="name" 
+            angle={-45} 
+            textAnchor="end" 
+            height={100}
+            interval={0}
+            tick={{ fontSize: 12 }}
+          />
+          <YAxis 
+            label={{ value: 'Responsive IPs', angle: -90, position: 'insideLeft' }}
+            yAxisId="left"
+          />
+          <YAxis 
+            orientation="right"
+            yAxisId="right"
+            label={{ value: 'Response Rate (%)', angle: 90, position: 'insideRight' }}
+          />
+          <Tooltip
+            contentStyle={{ backgroundColor: '#f9f9f9', border: '1px solid #ccc', borderRadius: '4px' }}
+            formatter={(value, name) => {
+              if (name === 'percentage') return [`${value.toFixed(2)}%`, 'Response Rate'];
+              if (name === 'responsive') return [value.toLocaleString(), 'Responsive IPs'];
+              return [value, name];
+            }}
+            labelFormatter={(label) => `${label} (${data.find(d => d.name === label)?.protocol})`}
+          />
+          <Legend />
+          <Bar yAxisId="left" dataKey="responsive" fill="#4e79a7" radius={[8, 8, 0, 0]} name="Responsive IPs">
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Bar>
+          <Line 
+            yAxisId="right"
+            type="monotone" 
+            dataKey="percentage" 
+            stroke="#f28e2b" 
+            strokeWidth={2} 
+            dot={{ r: 5 }}
+            name="Response Rate (%)"
+          />
+        </BarChart>
+      </ResponsiveContainer>
+      
+      {/* Protocol Statistics Table */}
+      <div style={{ marginTop: '30px', backgroundColor: '#f9f9f9', borderRadius: '8px', padding: '15px' }}>
+        <h6 style={{ marginBottom: '15px', color: '#333', fontWeight: 600 }}>Protocol Summary</h6>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
+          {data.map((item, idx) => (
+            <div 
+              key={idx} 
+              style={{
+                padding: '15px',
+                backgroundColor: '#fff',
+                borderLeft: `4px solid ${COLORS[idx % COLORS.length]}`,
+                borderRadius: '4px',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
+            >
+              <div style={{ fontSize: '11px', color: '#999', textTransform: 'uppercase', marginBottom: '4px' }}>
+                {item.shortName}
+              </div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: COLORS[idx % COLORS.length], marginBottom: '4px' }}>
+                {item.responsive.toLocaleString()}
+              </div>
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                {item.percentage.toFixed(1)}% responsive
+              </div>
+              <div style={{ fontSize: '11px', color: '#999', marginTop: '4px' }}>
+                {item.name}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Status Distribution Component
+const StatusDistributionChart = ({ statusData }) => {
+  if (!statusData || Object.keys(statusData).length === 0) return null;
+
+  const data = Object.entries(statusData).map(([status, info]) => ({
+    name: status.charAt(0).toUpperCase() + status.slice(1),
+    value: info.count,
+    percentage: info.percentage
+  }));
+
+  const COLORS_STATUS = ['#59a14f', '#e15759', '#f28e2b', '#4e79a7', '#76b7b2'];
+
+  return (
+    <div className="chart-container">
+      <h5>📊 Status Distribution</h5>
+      <p className="section-subtitle">Breakdown of response statuses</p>
+      <ResponsiveContainer width="100%" height={300}>
+        <PieChart>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            labelLine={false}
+            label={({ percentage }) => `${(percentage * 100).toFixed(1)}%`}
+            outerRadius={80}
+            fill="#8884d8"
+            dataKey="value"
+          >
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS_STATUS[index % COLORS_STATUS.length]} />
+            ))}
+          </Pie>
+          <Tooltip
+            contentStyle={{ backgroundColor: '#f9f9f9', border: '1px solid #ccc' }}
+            formatter={(value, name, props) => [
+              `${value} (${((value / data.reduce((sum, item) => sum + item.value, 0)) * 100).toFixed(2)}%)`,
+              props.payload.name
+            ]}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+      <div style={{ marginTop: '20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
+        {data.map((item, idx) => (
+          <div key={idx} style={{
+            padding: '12px',
+            backgroundColor: '#f5f5f5',
+            borderLeft: `4px solid ${COLORS_STATUS[idx % COLORS_STATUS.length]}`,
+            borderRadius: '4px'
+          }}>
+            <div style={{ fontSize: '12px', color: '#666' }}>{item.name}</div>
+            <div style={{ fontSize: '18px', fontWeight: 'bold', color: COLORS_STATUS[idx % COLORS_STATUS.length] }}>
+              {item.value.toLocaleString()}
+            </div>
+            <div style={{ fontSize: '11px', color: '#999' }}>{item.percentage.toFixed(1)}%</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Multi-Port Analysis Component
+const MultiPortAnalysisChart = ({ multiPortData }) => {
+  if (!multiPortData || multiPortData.length === 0) return null;
+
+  const data = multiPortData.sort((a, b) => a.ports - b.ports);
+
+  return (
+    <div className="chart-container">
+      <h5>🔌 Multi-Port Analysis</h5>
+      <p className="section-subtitle">How many IPs respond to multiple ports</p>
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+          <XAxis dataKey="ports" label={{ value: 'Number of Ports', position: 'insideBottomRight', offset: -5 }} />
+          <YAxis label={{ value: 'IP Count', angle: -90, position: 'insideLeft' }} />
+          <Tooltip
+            contentStyle={{ backgroundColor: '#f9f9f9', border: '1px solid #ccc' }}
+            formatter={(value, name) => [
+              value.toLocaleString(),
+              name === 'count' ? 'IPs' : name
+            ]}
+          />
+          <Bar dataKey="count" fill="#76b7b2" radius={[8, 8, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+// Temporal Trends Component
+const TemporalTrendsChart = ({ scanHistory }) => {
+  if (!scanHistory || scanHistory.length < 2) return null;
+
+  const data = scanHistory
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .map(scan => ({
+      date: new Date(scan.date).toLocaleDateString(),
+      phase: scan.phase,
+      responseRate: scan.response_rate !== undefined ? scan.response_rate : scan.success_rate || 0,
+      responsiveIPs: scan.responsive_ips || 0,
+      totalIPs: scan.total_ips || 0
+    }));
+
+  return (
+    <div className="chart-container">
+      <h5>📈 Temporal Trends</h5>
+      <p className="section-subtitle">Response rates over time across scans</p>
+      <ResponsiveContainer width="100%" height={300}>
+        <ComposedChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 60 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+          <XAxis dataKey="date" angle={-45} textAnchor="end" height={80} />
+          <YAxis yAxisId="left" label={{ value: 'Response Rate (%)', angle: -90, position: 'insideLeft' }} />
+          <YAxis yAxisId="right" orientation="right" label={{ value: 'IP Count', angle: 90, position: 'insideRight' }} />
+          <Tooltip
+            contentStyle={{ backgroundColor: '#f9f9f9', border: '1px solid #ccc' }}
+            formatter={(value, name) => {
+              if (name === 'responseRate') return [`${value.toFixed(2)}%`, 'Response Rate'];
+              if (name === 'responsiveIPs') return [value.toLocaleString(), 'Responsive IPs'];
+              return [value.toLocaleString(), name];
+            }}
+          />
+          <Legend />
+          <Line
+            yAxisId="left"
+            type="monotone"
+            dataKey="responseRate"
+            stroke="#4e79a7"
+            strokeWidth={2}
+            dot={{ r: 4 }}
+            name="Response Rate"
+          />
+          <Area
+            yAxisId="right"
+            type="monotone"
+            dataKey="responsiveIPs"
+            fill="#f28e2b"
+            stroke="#f28e2b"
+            opacity={0.3}
+            name="Responsive IPs"
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
 // Main App Component
 function App() {
   const [dashboardData, setDashboardData] = useState(null);
@@ -181,6 +440,23 @@ function App() {
       
       if (data.historical_data) {
         data.historical_data = data.historical_data.map(phase => ({
+          ...phase,
+          top_infrastructure: (phase.top_infrastructure || []).map(item => ({
+            ...item,
+            name: item.name === false ? 'No Response' : item.name === true ? 'Unknown' : String(item.name)
+          }))
+        }));
+      }
+
+      if (data.latest_scan?.top_infrastructure) {
+        data.latest_scan.top_infrastructure = data.latest_scan.top_infrastructure.map(item => ({
+          ...item,
+          name: item.name === false ? 'No Response' : item.name === true ? 'Unknown' : String(item.name)
+        }));
+      }
+
+      if (Array.isArray(data.scan_history)) {
+        data.scan_history = data.scan_history.map(phase => ({
           ...phase,
           top_infrastructure: (phase.top_infrastructure || []).map(item => ({
             ...item,
@@ -243,66 +519,38 @@ function App() {
 
   // Initialize with latest phase when data loads
   useEffect(() => {
-    if (dashboardData?.historical_data && dashboardData.historical_data.length > 0 && !selectedPhase) {
-      const latest = dashboardData.historical_data.find(p => p.is_latest) || dashboardData.historical_data[0];
+    const scans = dashboardData?.scan_history || [];
+    if (scans.length > 0 && !selectedPhase) {
+      const latest = dashboardData?.latest_scan || scans.find(p => p.is_latest) || scans[scans.length - 1];
       setSelectedPhase(latest);
     }
   }, [dashboardData, selectedPhase]);
 
-  const currentData = selectedPhase || dashboardData;
-  const stats = currentData?.stats || dashboardData?.scan_stats;
-  const infrastructure = currentData?.top_infrastructure || dashboardData?.top_infrastructure || [];
+  const scans = useMemo(() => dashboardData?.scan_history || [], [dashboardData]);
+  const currentScan = selectedPhase || dashboardData?.latest_scan || scans.find(p => p.is_latest) || scans[scans.length - 1];
 
-  // Trend calculation (comparing with previous phase)
-  const trendHitRate = useMemo(() => {
-    if (!dashboardData?.historical_data || dashboardData.historical_data.length < 2) return 0;
-    const sorted = [...dashboardData.historical_data].sort((a, b) => new Date(b.date) - new Date(a.date));
-    const current = sorted[0];
-    const previous = sorted[1];
-    return ((current.stats.hit_rate_percentage - previous.stats.hit_rate_percentage) / previous.stats.hit_rate_percentage) * 100;
-  }, [dashboardData]);
+  const totalIps = currentScan?.total_ips || dashboardData?.summary?.total_ips_scanned || 0;
+  const responsiveIps = currentScan?.responsive_ips ?? dashboardData?.summary?.responsive_ips ?? 0;
+  const successfulIps = currentScan?.successful_ips ?? dashboardData?.summary?.successful_ips ?? 0;
+  const responseRate = currentScan?.response_rate ?? dashboardData?.summary?.response_rate_percentage ?? (totalIps ? (responsiveIps / totalIps) * 100 : 0);
+  const successRate = currentScan?.success_rate ?? dashboardData?.summary?.success_rate_percentage ?? (totalIps ? (successfulIps / totalIps) * 100 : 0);
 
-  // Prepare historical trend data
-  const trendData = useMemo(() => {
-    if (!dashboardData?.historical_data) return [];
-    return dashboardData.historical_data
-      .slice()
-      .sort((a, b) => new Date(a.date) - new Date(b.date))
-      .map(item => ({
-        date: item.date,
-        phase: item.phase,
-        hitRate: item.stats.hit_rate_percentage,
-        success: item.stats.success,
-        failed: item.stats.failed,
-        total: item.stats.total
-      }));
-  }, [dashboardData]);
+  // Optional legacy infrastructure (only render if present)
+  const infrastructure = currentScan?.top_infrastructure || dashboardData?.top_infrastructure || [];
+  const hasInfra = Array.isArray(infrastructure) && infrastructure.length > 0;
+  const infraTotal = currentScan?.stats?.success ?? currentScan?.successful_ips ?? successfulIps ?? 1;
 
-  // Success vs Failed comparison data
-  const comparisonData = useMemo(() => {
-    if (!dashboardData?.historical_data) return [];
-    return dashboardData.historical_data
-      .slice()
-      .sort((a, b) => new Date(a.date) - new Date(b.date))
-      .map(item => ({
-        phase: item.phase.substring(0, 8),
-        Success: item.stats.success,
-        Failed: item.stats.failed,
-        total: item.stats.total
-      }));
-  }, [dashboardData]);
-
-  // Filtered infrastructure data
   const filteredInfra = useMemo(() => {
+    if (!hasInfra) return [];
     return infrastructure
-      .filter(item => item.name.toLowerCase().includes(query.toLowerCase()))
+      .filter(item => String(item.name || '').toLowerCase().includes(query.toLowerCase()))
       .sort((a, b) => {
         let cmp = 0;
-        if (sortKey === 'name') cmp = a.name.localeCompare(b.name);
-        else cmp = Number(a[sortKey]) - Number(b[sortKey]);
+        if (sortKey === 'name') cmp = String(a.name || '').localeCompare(String(b.name || ''));
+        else cmp = Number(a[sortKey] || 0) - Number(b[sortKey] || 0);
         return sortDir === 'asc' ? cmp : -cmp;
       });
-  }, [infrastructure, query, sortKey, sortDir]);
+  }, [hasInfra, infrastructure, query, sortKey, sortDir]);
 
   // Show loading state
   if (loading) {
@@ -344,8 +592,8 @@ function App() {
     );
   }
 
-  // Guard against missing stats/infrastructure
-  if (!stats || !infrastructure) {
+  // Guard against missing scans
+  if (!currentScan) {
     return (
       <div className="app-container">
         <div style={{ textAlign: 'center', padding: '40px', fontSize: '18px', color: '#ff9800' }}>
@@ -358,10 +606,7 @@ function App() {
     );
   }
 
-  // Calculate metrics (now safe after guard check)
-  const hitRate = stats.hit_rate_percentage || ((stats.success / stats.total) * 100);
-  const failRate = 100 - hitRate;
-  const successRatio = (stats.success / stats.total) * 100;
+  const failRate = 100 - responseRate;
 
   return (
     <div className="app-container">
@@ -385,7 +630,7 @@ function App() {
             <span className="meta-pill">
               <span className="meta-label">Phases</span>
               <span className="meta-value">
-                {dashboardData?.total_phases || dashboardData?.historical_data?.length || 0}
+                {dashboardData?.total_scans || scans.length || 0}
               </span>
             </span>
             <span className="meta-pill">
@@ -403,34 +648,32 @@ function App() {
         <section className="kpi-section">
           <div className="kpi-grid">
             <MetricCard
-              title="Total Scanned"
-              value={stats.total}
-              subtitle="IPv6 addresses scanned"
+              title="Total IPs"
+              value={totalIps}
+              subtitle="IPv6 addresses in selected scan"
               icon="🎯"
               color="#4e79a7"
             />
             <MetricCard
-              title="Success Count"
-              value={stats.success}
-              subtitle={`${successRatio.toFixed(2)}% successful`}
+              title="Responsive IPs"
+              value={responsiveIps}
+              subtitle={`${responseRate.toFixed(2)}% responded (any protocol TRUE)`}
+              icon="📡"
+              color="#f28e2b"
+            />
+            <MetricCard
+              title="Successful"
+              value={successfulIps}
+              subtitle={`${successRate.toFixed(2)}% status=success`}
               icon="✓"
               color="#59a14f"
-              trend={trendHitRate}
             />
             <MetricCard
-              title="Failed Count"
-              value={stats.failed}
-              subtitle={`${failRate.toFixed(2)}% failed`}
+              title="Non-Responsive"
+              value={Math.max(0, totalIps - responsiveIps)}
+              subtitle={`${failRate.toFixed(2)}% no protocol responded`}
               icon="✗"
               color="#e15759"
-            />
-            <MetricCard
-              title="Hit Rate"
-              value={hitRate}
-              subtitle="Success percentage"
-              icon="📊"
-              color="#f28e2b"
-              trend={trendHitRate}
             />
           </div>
         </section>
@@ -439,17 +682,17 @@ function App() {
         <section className="status-section">
           <h4>Performance Metrics</h4>
           <div className="status-grid">
-            <StatusIndicator value={successRatio} threshold={75} label="Success Rate" />
-            <StatusIndicator value={hitRate} threshold={50} label="Hit Rate" />
-            <StatusIndicator value={Math.min(100, (stats.success / Math.max(1, stats.total)) * 100)} threshold={60} label="Efficiency" />
+            <StatusIndicator value={successRate} threshold={50} label="Success Rate" />
+            <StatusIndicator value={responseRate} threshold={50} label="Response Rate" />
+            <StatusIndicator value={Math.min(100, responseRate)} threshold={60} label="Reachability" />
           </div>
         </section>
 
         {/* Phase Timeline */}
-        {dashboardData.historical_data && dashboardData.historical_data.length > 0 && (
+        {scans.length > 0 && (
           <section className="timeline-section">
             <PhaseTimeline
-              data={dashboardData.historical_data}
+              data={scans}
               selectedPhase={selectedPhase}
               onSelectPhase={setSelectedPhase}
             />
@@ -458,78 +701,64 @@ function App() {
 
         {/* Charts Grid */}
         <div className="charts-grid">
-          {/* Hit Rate Trend */}
-          {trendData.length > 0 && (
-            <div className="chart-card">
-              <h5>Hit Rate Trend</h5>
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={trendData}>
-                  <defs>
-                    <linearGradient id="colorHitRate" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f28e2b" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="#f28e2b" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                  <XAxis dataKey="date" stroke="#666" />
-                  <YAxis stroke="#666" />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area
-                    type="monotone"
-                    dataKey="hitRate"
-                    stroke="#f28e2b"
-                    fillOpacity={1}
-                    fill="url(#colorHitRate)"
-                    name="Hit Rate (%)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+          {/* NEW: Port Reachability (if available) */}
+          {currentScan?.port_stats && (
+            <div className="chart-card full-width">
+              <PortReachabilityChart portStats={currentScan.port_stats} />
             </div>
           )}
 
-          {/* Success vs Failed Comparison */}
-          {comparisonData.length > 0 && (
+          {/* NEW: Status Distribution (if available) */}
+          {currentScan?.status_distribution && (
             <div className="chart-card">
-              <h5>Success vs Failed Comparison</h5>
-              <ResponsiveContainer width="100%" height={300}>
-                <ComposedChart data={comparisonData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                  <XAxis dataKey="phase" stroke="#666" />
-                  <YAxis stroke="#666" />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend />
-                  <Bar dataKey="Success" fill="#59a14f" radius={[8, 8, 0, 0]} />
-                  <Bar dataKey="Failed" fill="#e15759" radius={[8, 8, 0, 0]} />
-                </ComposedChart>
-              </ResponsiveContainer>
+              <StatusDistributionChart statusData={currentScan.status_distribution} />
             </div>
           )}
 
-          {/* Infrastructure Distribution */}
-          <div className="chart-card">
-            <InfrastructureBreakdown data={infrastructure} totalSuccess={stats.success} />
-          </div>
+          {/* NEW: Multi-Port Analysis (if available) */}
+          {currentScan?.multi_port_analysis && currentScan.multi_port_analysis.length > 0 && (
+            <div className="chart-card">
+              <MultiPortAnalysisChart multiPortData={currentScan.multi_port_analysis} />
+            </div>
+          )}
 
-          {/* Top Infrastructure Providers */}
-          <div className="chart-card">
-            <h5>Top Infrastructure Providers</h5>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart
-                data={infrastructure.slice(0, 10)}
-                layout="vertical"
-                margin={{ top: 5, right: 30, left: 200 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                <XAxis type="number" stroke="#666" />
-                <YAxis dataKey="name" type="category" width={190} tick={{ fontSize: 12 }} stroke="#666" />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="count" fill="#4e79a7" radius={[0, 8, 8, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {/* NEW: Temporal Trends (if available) */}
+          {scans.length > 1 && (
+            <div className="chart-card full-width">
+              <TemporalTrendsChart scanHistory={scans} />
+            </div>
+          )}
+
+          {/* Legacy Infrastructure Distribution (only if present) */}
+          {hasInfra && (
+            <div className="chart-card">
+              <InfrastructureBreakdown data={infrastructure} totalSuccess={Math.max(1, infraTotal)} />
+            </div>
+          )}
+
+          {/* Top Infrastructure Providers (legacy, only if present) */}
+          {hasInfra && (
+            <div className="chart-card">
+              <h5>Top Infrastructure Providers</h5>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart
+                  data={infrastructure.slice(0, 10)}
+                  layout="vertical"
+                  margin={{ top: 5, right: 30, left: 200 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                  <XAxis type="number" stroke="#666" />
+                  <YAxis dataKey="name" type="category" width={190} tick={{ fontSize: 12 }} stroke="#666" />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="count" fill="#4e79a7" radius={[0, 8, 8, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
         {/* Infrastructure Table */}
+        {hasInfra && (
         <section className="table-section">
           <div className="table-header">
             <h4>All Infrastructure Providers</h4>
@@ -578,12 +807,12 @@ function App() {
                   <tr key={idx} className={idx % 2 === 0 ? 'even' : 'odd'}>
                     <td className="provider-name" title={item.name}>{item.name}</td>
                     <td className="count-value">{item.count.toLocaleString()}</td>
-                    <td className="percentage">{((item.count / stats.success) * 100).toFixed(3)}%</td>
+                    <td className="percentage">{((item.count / Math.max(1, infraTotal)) * 100).toFixed(3)}%</td>
                     <td>
                       <div className="progress-bar">
                         <div
                           className="progress-fill"
-                          style={{ width: `${(item.count / stats.success) * 100}%` }}
+                          style={{ width: `${(item.count / Math.max(1, infraTotal)) * 100}%` }}
                         />
                       </div>
                     </td>
@@ -597,6 +826,7 @@ function App() {
             <span className="result-count">Showing {filteredInfra.length} of {infrastructure.length} providers</span>
           </div>
         </section>
+        )}
       </div>
 
       {/* Footer */}
