@@ -1,6 +1,6 @@
 {
     "last_updated": "2026-05-09T02:33:10.529629",
-    "total_scans": 4,
+    "total_scans": 3,
     "latest_scan": {
         "phase": "06_05_26",
         "date": "2026-05-06",
@@ -279,91 +279,6 @@
             "response_rate": 100.0,
             "success_rate": 1.56,
             "is_latest": true
-        },
-        {
-            "phase": "08_05_26",
-            "date": "2026-05-08",
-            "timestamp": "2026-05-09T02:33:10.413609",
-            "total_ips": 20,
-            "format": "port_reachability",
-            "port_stats": {
-                "icmp": {
-                    "responsive": 11,
-                    "percentage": 55.0
-                },
-                "tcp80": {
-                    "responsive": 13,
-                    "percentage": 65.0
-                },
-                "tcp443": {
-                    "responsive": 12,
-                    "percentage": 60.0
-                },
-                "tcp8080": {
-                    "responsive": 7,
-                    "percentage": 35.0
-                },
-                "tcp8443": {
-                    "responsive": 7,
-                    "percentage": 35.0
-                },
-                "udp53": {
-                    "responsive": 9,
-                    "percentage": 45.0
-                }
-            },
-            "multi_port_analysis": [
-                {
-                    "ports": 0,
-                    "count": 2,
-                    "percentage": 10.0,
-                    "label": "0 ports"
-                },
-                {
-                    "ports": 1,
-                    "count": 8,
-                    "percentage": 40.0,
-                    "label": "1 port"
-                },
-                {
-                    "ports": 3,
-                    "count": 1,
-                    "percentage": 5.0,
-                    "label": "3 ports"
-                },
-                {
-                    "ports": 4,
-                    "count": 3,
-                    "percentage": 15.0,
-                    "label": "4 ports"
-                },
-                {
-                    "ports": 6,
-                    "count": 6,
-                    "percentage": 30.0,
-                    "label": "6 ports"
-                }
-            ],
-            "responsive_ips": 18,
-            "silent_ips": 2,
-            "successful_ips": 9,
-            "status_distribution": {
-                "success": {
-                    "count": 9,
-                    "percentage": 45.0
-                },
-                "io-timeout": {
-                    "count": 7,
-                    "percentage": 35.0
-                },
-                "unknown-error": {
-                    "count": 4,
-                    "percentage": 20.0
-                }
-            },
-            "response_rate": 90.0,
-            "success_rate": 45.0,
-            "is_latest": false
         }
     ],
     "summary": {
