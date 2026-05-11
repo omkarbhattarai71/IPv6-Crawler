@@ -1,0 +1,3 @@
+FAILED at: gcs_download - Could not download gs://ipv6-crawler-batches/processed_at_vm/processed_metrics_06_05_26.csv
+SUCCESS|2026-05-08 11:58:25|06_05_26|08_05_26|826957
+SUCCESS|2026-05-09 02:33:19|06_05_26|09_05_26|828043

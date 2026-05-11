@@ -139,15 +139,14 @@ IPv6-Crawler/
 │   ├── prefix_model_<PHASE>.pkl        # Phase-specific model
 │   └── prefix_model_latest.pkl         # Symlink to latest
 ├── results/
-│   └── candidates_<PHASE>.parquet      # 50M addresses
+│   └── candidates_<PHASE>.parquet      # 20M addresses
 ├── logs/
 │   └── pipeline_<JOBID>.log            # SLURM execution logs
 ├── dashboard/src/
 │   └── dashboard_data.json             # Historical metrics
-└── dataset/
-    ├── input/                          # Input data
-    ├── apd/                            # Anonymized data
-    └── latest-data/                    # Current snapshots
+└── dataset/latest-data/
+    ├── input/                          # non aliased Input data
+    └── apd/                            # aliased
 ```
 
 ---

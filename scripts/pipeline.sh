@@ -10,7 +10,7 @@
 #   Current Phase: Today's date for outputs (auto-detected)
 #
 # Usage (Local):
-#   ./pipeline.sh 21_04_26
+#   ./pipeline.sh {Phase}  # e.g., ./pipeline.sh 21_04_26
 #
 # Usage (SLURM - AAU HPC):
 #   sbatch pipeline.sh 21_04_26
@@ -25,12 +25,9 @@
 #SBATCH --job-name=ipv6-pipeline
 #SBATCH --output=slurm-output.log
 #SBATCH --error=slurm-output.err
-#SBATCH --time=4:00:00
+#SBATCH --time=6:00:00
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=4
-# Note: Using default partition (l4)
-# Available on ailab: l4 (GPU), vmware
-# Override with: sbatch -p vmware pipeline.sh (or -p l4 explicitly)
 
 set -e
 
