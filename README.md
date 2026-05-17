@@ -1,312 +1,165 @@
 # IPv6-Crawler
 
-Automated IPv6 candidate generation pipeline using machine learning for active prefix prediction and GCP cloud integration.
-
-## Overview
-
-This project implements a **dual-phase pipeline** that processes IPv6 scan data to generate active address candidates. It uses LightGBM to classify IPv6 /48 prefixes as active or inactive, generates 50M+ candidate addresses, and uploads results to Google Cloud Storage.
-
-**Key Features:**
-- ✅ Automated 5-stage pipeline orchestration
-- ✅ SLURM integration for HPC batch execution (AAU ailab)
-- ✅ Dual-phase system (input data phase + current execution phase)
-- ✅ Historical data preservation with automatic date tracking
-- ✅ Google Cloud Storage integration
-- ✅ Real-time dashboard updates with historical metrics
+**Automated IPv6 candidate generation & probing pipeline using LightGBM + GCP + SLURM**
 
 ---
 
-## Requirements
+## A.  Closed-Loop Pipeline
 
-### System
-- **Python:** 3.8+
-- **OS:** Linux/macOS
-- **HPC (optional):** SLURM scheduler (tested on AAU ailab)
-
-### Python Packages
 ```
-pandas>=2.0
-numpy
-lightgbm>=3.0
-scikit-learn
-pyarrow
+┌─────────────────────────────────────────────────────────────────┐
+│ AI Lab (AAU ailab)                                              │
+│                                                                 │
+│ 1. Generate Candidates                                          │
+│    sbatch pipeline.sh <phase>                                   │
+│              ↓                                                  │
+│    Output: parquet → uploaded to GCS                                   │
+│              ↓                                                  │
+│    gs://ipv6-crawler-batches/batches/candidates_<phase>.parquet │
+└────────────────────────┬────────────────────────────────────────┘
+                         │ Download
+                         ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ GCP VM (europe-west9-b)                                         │
+│                                                                 │
+│ 2. Run ZMap Crawler                                             │
+│    nohup bash crawler_main.sh <phase> > nohup.out 2>&1 &        │
+│      Converts .parquet candidates to .txt and starts probing    │
+│              ↓                                                  │
+│    TCP/ICMP probing (port 80, 443, 8080, etc.)                  │
+│              ↓                                                  │
+│    Output: processed_metrics_<phase>.csv                        │
+│              ↓                                                  │
+│    gs://ipv6-crawler-batches/processed_at_vm/...                │
+└────────────────────────┬────────────────────────────────────────┘
+                         │ Download
+                         ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ AI Lab (Analysis & Metrics)                                     │
+│                                                                 │
+│ 3. Process Results                                              │
+│    python scripts/extract_all_metrics.py                        │
+│    python scripts/metrics_test.py                               │
+│           ↓                                                     │
+│    Metrics: precision, recall, response rates, protocols        │
+│    Dashboard: update with new phase data                        │
+│           ↓                                                     │
+│    REPEAT: Loop back to step 1 for next phase                   │
+└─────────────────────────────────────────────────────────────────┘
 ```
-
-### External Tools
-- `gsutil` (for Google Cloud Storage uploads)
-
-### Data
-- Processed GCP metrics file: `processed_gcloud/processed_metrics_<PHASE>.csv`
-  - Format: Phase-based naming (e.g., `processed_metrics_20_04_26.csv` for April 20, 2026)
-  - Required columns: IP address, infrastructure provider, success rate
 
 ---
 
-## Installation
+## B. Quick Start
 
-### 1. Clone Repository
+### Run Pipeline (AI Lab)
+
 ```bash
 cd /ceph/project/IPv6-BOS/IPv6-Crawler
-```
-
-### 2. Set Up Python Environment
-```bash
-python3 -m venv venv
 source venv/bin/activate
-pip install pandas numpy lightgbm scikit-learn pyarrow
-```
 
-### 3. Verify Setup
-```bash
-python3 -c "import pandas, lightgbm; print('✓ Dependencies installed')"
-```
-
----
-
-## How to Run
-
-### Local Execution
-```bash
-cd scripts
-./pipeline.sh 20_04_26
-```
-
-### SLURM Batch Submission (AAU HPC)
-```bash
-cd scripts
+# Generate candidates for phase DD_MM_YY
+# (e.g., 20_04_26 for April 20, 2026)
 sbatch pipeline.sh 20_04_26
+
+# Outputs:
+#   - Parquet file: results/candidates_20_04_26.parquet
+#   - Uploaded to: gs://ipv6-crawler-batches/batches/candidates_20_04_26.txt
 ```
 
-**Parameters:**
-- `20_04_26` = Input phase (format: `ddmmyy` matching your data file)
-- Output phase auto-detected from current date
+### Run Crawler (GCP VM)
 
-**Monitor Job:**
 ```bash
-squeue | grep ipv6-pip        # Check status
-tail -f ../logs/pipeline_*.log # View real-time logs
-sacct -j <JobID>              # Check completed job
+gcloud compute ssh [instance-name] --zone=europe-west9-b
+
+cd ~/IPv6-Scanner/crawl_analysis
+
+# Download candidates and run ZMap
+nohup bash crawler_main.sh 20_04_26 > nohup.out 2>&1 &
+
+# Monitor
+tail -f nohup.out
+
+# Results uploaded to:
+#   gs://ipv6-crawler-batches/processed_at_vm/processed_metrics_20_04_26.csv
 ```
 
----
+### Extract Metrics (AI Lab)
 
-## Pipeline Stages
-
-### Stage 1: Build Features
-- Loads historical features and new GCP scan data
-- Extracts /48 IPv6 prefixes
-- Calculates prefix densities and activity metrics
-- **Output:** `processed/features.csv`
-
-### Stage 2: Train Model
-- Trains LightGBM classifier (300 trees, balanced classes)
-- Learns prefix activity patterns
-- **Output:** `models/prefix_model_<PHASE>.pkl`
-
-### Stage 3: Generate Candidates
-- Loads trained model
-- Predicts active prefixes from IPv6 address space
-- Generates 50M candidate addresses
-- Deduplicates against historical candidates
-- **Output:** `results/candidates_<PHASE>.parquet`
-
-### Stage 4: Upload to Cloud
-- Uploads candidate set to Google Cloud Storage
-- **Destination:** `gs://ipv6-crawler-batches/batches/`
-
-### Stage 5: Update Dashboard
-- Aggregates metrics across all phases
-- Appends to historical data (preserves history)
-- Generates dashboard JSON for frontend
-- **Output:** `dashboard/src/dashboard_data.json`
-
----
-
-## File Structure
-
-```
-IPv6-Crawler/
-├── README.md                           # This file
-├── scripts/
-│   ├── pipeline.sh                     # Main SLURM launcher
-│   ├── pipeline.py                     # Core orchestrator
-│   └── generate_dashboard_data.py      # Dashboard metrics
-├── processed_gcloud/
-│   └── processed_metrics_<PHASE>.csv   # Input GCP data
-├── processed/
-│   └── features.csv                    # Cumulative features
-├── models/
-│   ├── prefix_model_<PHASE>.pkl        # Phase-specific model
-│   └── prefix_model_latest.pkl         # Symlink to latest
-├── results/
-│   └── candidates_<PHASE>.parquet      # 20M addresses
-├── logs/
-│   └── pipeline_<JOBID>.log            # SLURM execution logs
-├── dashboard/src/
-│   └── dashboard_data.json             # Historical metrics
-└── dataset/latest-data/
-    ├── input/                          # non aliased Input data
-    └── apd/                            # aliased
-```
-
----
-
-## Dual-Phase System
-
-The pipeline uses **two independent date phases** for flexibility:
-
-### Input Phase
-- Date from your processed metrics file (e.g., `20_04_26`)
-- Determines which data file to load
-- Passed as command argument: `sbatch pipeline.sh 20_04_26`
-
-### Current Phase
-- Today's date (auto-detected, e.g., `04_05_26`)
-- Used for all output filenames
-- Ensures outputs don't overwrite each other
-
-**Example:**
 ```bash
-sbatch pipeline.sh 20_04_26
-# Input:  processed_metrics_20_04_26.csv (April 20, 2026 data)
-# Output: prefix_model_04_05_26.pkl     (generated May 4, 2026)
-#         candidates_04_05_26.parquet   (generated May 4, 2026)
-```
-
----
-
-## Output Files
-
-### Models
-- `models/prefix_model_<PHASE>.pkl` - LightGBM classifier
-- `models/prefix_model_latest.pkl` - Symlink to most recent
-
-### Candidates
-- `results/candidates_<PHASE>.parquet` - 50M IPv6 addresses
-- Format: Apache Parquet (efficient, queryable)
-
-### Dashboard
-- `dashboard/src/dashboard_data.json` - Historical metrics
-  - Aggregate statistics (all-time)
-  - Per-phase statistics
-  - Top 10 CDNs/providers
-  - Marked "is_latest" for current phase
-
-**Dashboard JSON Structure:**
-```json
-{
-  "last_updated": "2026-05-04T19:30:00",
-  "scan_stats": { "total": 50M, "success": 35M, "hit_rate": 70.0 },
-  "historical_data": [
-    {
-      "phase": "20_04_26",
-      "date": "2026-04-20",
-      "is_latest": true,
-      "stats": { ... },
-      "top_infrastructure": [ ... ]
-    }
-  ]
-}
-```
-
----
-
-## Troubleshooting
-
-### SLURM Job Fails Immediately
-```bash
-# Check error file
-cat logs/pipeline_*.err
-# or SLURM output
-cat scripts/slurm-output.err
-
-# Verify input file exists
-ls processed_gcloud/processed_metrics_<PHASE>.csv
-
-# Check SLURM partitions
-sinfo
-```
-
-### Missing Input Data
-```bash
-# Create symlink with correct phase naming
-cd processed_gcloud
-ln -sf processed_metrics_new_20_04_2026.csv processed_metrics_20_04_26.csv
-```
-
-### Python Package Errors
-```bash
-# Activate venv and reinstall
+cd /ceph/project/IPv6-BOS/IPv6-Crawler
 source venv/bin/activate
-pip install --upgrade pandas lightgbm scikit-learn
-```
 
-### Job Still Running After Hours
-- Large datasets (750M+ prefixes) take 2-3 hours for model training
-- Check progress: `tail -f logs/pipeline_*.log`
-- Model training is the longest stage (usually 1.5+ hours)
+# Download results from GCP VM folder
+python scripts/extract_all_metrics.py
+This generates:
+- metrics_report.txt - Human-readable metrics
+- metrics_data.csv - Structured data 
 
-### Dashboard Not Updating
-```bash
-# Manually trigger dashboard update
-cd scripts
-source ../venv/bin/activate
-python3 -c "from generate_dashboard_data import generate_dashboard_data; generate_dashboard_data(current_phase='20_04_26')"
-```
+# Validation & testing
+python scripts/metrics_test.py
+# View results
+cat test_results.txt
 
----
-
-## SLURM Configuration (AAU ailab)
-
-### Available Partitions
-- `l4` (default, GPU-equipped) - Recommended
-- `vmware` - Alternative CPU-only partition
-
-### Override Partition
-```bash
-sbatch -p vmware pipeline.sh 20_04_26
-```
-
-### Job Resources
-- **Time:** 3 hours (adjustable with `#SBATCH --time=`)
-- **Memory:** 32GB
-- **CPUs:** 4 cores
-
-### Monitor All Your Jobs
-```bash
-squeue --me
-sacct --me
 ```
 
 ---
 
-## Pipeline Performance Metrics
+## C. GCS Bucket Structure
 
-| Stage | Typical Duration | Dataset Size |
-|-------|-----------------|--------------|
-| Build Features | 50-60 min | 752M prefixes |
-| Train Model | 60-90 min | Full dataset |
-| Generate Candidates | 20-30 min | 50M addresses |
-| Upload to Cloud | 5-10 min | ~400MB file |
-| Update Dashboard | 5-10 sec | Historical data |
-| **Total** | **2-3 hours** | **Full pipeline** |
+| Path | Content | Updated By |
+|------|---------|-----------|
+| `gs://ipv6-crawler-batches/batches/` | Candidate .txt files | AI Lab (pipeline.sh) |
+| `gs://ipv6-crawler-batches/processed_at_vm/` | Probe results (CSV) | GCP VM (crawler_main.sh) |
 
 ---
 
-## Cloud Integration
+## D. Configuration
 
-### Google Cloud Storage Upload
-- Automatically uploads to: `gs://ipv6-crawler-batches/batches/`
-- Requires `gsutil` authentication
-- Configure: `gcloud auth login`
-
-### Verify Upload
-```bash
-gsutil ls gs://ipv6-crawler-batches/batches/candidates_*.parquet
-```
+**LightGBM Model:** 300 estimators, learning_rate=0.05, balanced classes  
+**Candidate Heuristics:** Patterns [1, 2, 80, 443, 8080, 0x100, 0x200] + 120 random per prefix  
+**Active Threshold:** density > 10  
+**Probing:** ZMap (TCP 80, 443, 8080, ICMP, UDP/53)
 
 ---
 
-**Last Updated:** May 4, 2026  
-**Status:** ✅ Production Ready  
-**Python:** 3.8+  
+## E. Results (7+ Phases)
+
+- **Total probed:** 273,856 + candidates till report was written.
+- **Response rate:** 94.2%
+- **HTTPS:** 91%, HTTP: 6.5%, ICMP: 7.4%, DNS: 0.2%
+- **Single-service:** 93.89%
+- **Stability:** σ < 0.4% across phases
+
+---
+
+
+## F. Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| Pipeline fails: input file missing | Candidates uploaded to GCS batches folder |
+| Crawler hangs | `tail -f nohup.out` to debug |
+| Results not found | Check `gs://ipv6-crawler-batches/processed_at_vm/` |
+| Metrics extraction error | Run `python scripts/extract_all_metrics.py` after crawler completes |
+
+---
+
+## G. Limitations
+
+**Infrastructure Constraints:**
+- AI Lab infrastructure lacks native IPv6 support, preventing active probing from the local environment. GCP VMs were deployed to overcome this limitation.
+
+**Resource Limitations:**
+- GCP VM instance is constrained by memory (16GB), CPU (4 cores), and network bandwidth, limiting concurrent probe rates.
+- Cost-factor restrictions limit continuous 24/7 scanning operations. Probing is conducted in discrete phases to balance accuracy and budget.
+
+**Probing Limitations:**
+- Rate-limiting imposed by target networks and ISP policies restricts probe throughput (avg. 1K-5K packets/sec per phase).
+- Single vantage point (europe-west9-b region) introduces geographic bias in IPv6 reachability measurements.
+- Measurement window (April 19 - May 13, 2026, 25 days) captures a temporal snapshot and may not represent long-term trends.
+
+**Data Constraints:**
+- Response rates (94.2%) reflect firewall filtering and network policies that may hide active infrastructure behind restrictive ACLs.
+- Protocol distribution heavily weighted toward HTTPS (91%) due to focus on HTTP/HTTPS services; other IPv6-enabled services may be underrepresented.
+- Candidate generation relies on heuristic patterns and random sampling, potentially missing non-standard service deployments.
