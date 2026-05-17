@@ -409,7 +409,7 @@ const TemporalTrendsChart = ({ scanHistory }) => {
         <ComposedChart data={data} margin={{ top: 20, right: 80, left: 0, bottom: 80 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
           <XAxis dataKey="date" angle={-45} textAnchor="end" height={80} />
-          <YAxis yAxisId="left" label={{ value: 'Response Rate (%)', angle: -90, position: 'insideLeft' }} tickFormatter={(v) => `${v}%`} />
+          <YAxis yAxisId="left" label={{ value: 'Response Rate (%)', angle: -90, position: 'insideLeft', dx: -15 }} tickFormatter={(v) => `${v}%`} />
           <YAxis yAxisId="right" orientation="right" label={{ value: 'IP Count', angle: 90, position: 'insideRight' }} width={80} tickFormatter={formatNumberShort} />
           <Tooltip
             contentStyle={{ backgroundColor: '#f9f9f9', border: '1px solid #ccc' }}
