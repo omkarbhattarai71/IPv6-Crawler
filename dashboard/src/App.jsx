@@ -187,7 +187,7 @@ const PortReachabilityChart = ({ portStats }) => {
       <h5>🌐 Port Reachability Analysis</h5>
       <p className="section-subtitle">Count of IPs responding on each protocol (TRUE = responsive)</p>
       <ResponsiveContainer width="100%" height={350}>
-        <BarChart data={data} margin={{ top: 20, right: 90, left: 80, bottom: 60 }}>
+        <BarChart data={data} margin={{ top: 20, right: 100, left: 100, bottom: 60 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
           <XAxis
             dataKey="name"
@@ -199,7 +199,7 @@ const PortReachabilityChart = ({ portStats }) => {
             tickFormatter={(val) => val}
           />
           <YAxis
-            label={{ value: 'Responsive IPs', angle: -90, position: 'insideLeft', offset: 10 }}
+            label={{ value: 'Responsive IPs', angle: -90, position: 'insideLeft', offset: 0, dy: 0 }}
             yAxisId="left"
             tickFormatter={formatNumberShort}
             width={80}
@@ -207,7 +207,7 @@ const PortReachabilityChart = ({ portStats }) => {
           <YAxis
             orientation="right"
             yAxisId="right"
-            label={{ value: 'Response Rate (%)', angle: 90, position: 'insideRight', offset: 10 }}
+            label={{ value: 'Response Rate (%)', angle: 90, position: 'insideRight', offset: 0, dy: 0 }}
             domain={[0, 100]}
             ticks={[0,25,50,75,100]}
             tickFormatter={(v) => `${v}%`}
@@ -406,11 +406,11 @@ const TemporalTrendsChart = ({ scanHistory }) => {
       <h5>📈 Temporal Trends</h5>
       <p className="section-subtitle">Response rates over time across scans</p>
       <ResponsiveContainer width="100%" height={300}>
-        <ComposedChart data={data} margin={{ top: 20, right: 80, left: 0, bottom: 80 }}>
+        <ComposedChart data={data} margin={{ top: 20, right: 100, left: 100, bottom: 80 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
           <XAxis dataKey="date" angle={-45} textAnchor="end" height={80} />
-          <YAxis yAxisId="left" label={{ value: 'Response Rate (%)', angle: -90, position: 'insideLeft', offset: 10 }} tickFormatter={(v) => `${v}%`} />
-          <YAxis yAxisId="right" orientation="right" label={{ value: 'IP Count', angle: 90, position: 'insideRight', offset: 10 }} width={80} tickFormatter={formatNumberShort} />
+          <YAxis yAxisId="left" label={{ value: 'Response Rate (%)', angle: -90, position: 'insideLeft', offset: 0, dy: 0 }} tickFormatter={(v) => `${v}%`} />
+          <YAxis yAxisId="right" orientation="right" label={{ value: 'IP Count', angle: 90, position: 'insideRight', offset: 0, dy: 0 }} width={80} tickFormatter={formatNumberShort} />
           <Tooltip
             contentStyle={{ backgroundColor: '#f9f9f9', border: '1px solid #ccc' }}
             formatter={(value, name) => {
